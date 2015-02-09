@@ -213,7 +213,7 @@ def ReadMeshTextureStage(file,chunkEnd):
         else:
             file.seek(chunkSize,1)
 
-    result = W3DMeshTextureStage(txIds = TextureIds,txCoords = TextureCoords)
+    return W3DMeshTextureStage(txIds = TextureIds,txCoords = TextureCoords)
 
 def ReadMeshMaterialPass(file, chunkEnd):
     VertexMaterialIds = []
@@ -235,8 +235,8 @@ def ReadMeshMaterialPass(file, chunkEnd):
         else:
             file.seek(chunkSize,1)
 
-    result = W3DMeshMaterialPass(vmIds = VertexMaterialIds,shaderIds = ShaderIds,txStage = TextureStage)
-    return result
+    return W3DMeshMaterialPass(vmIds = VertexMaterialIds,shaderIds = ShaderIds,txStage = TextureStage)
+
 
 def ReadW3DMaterial(file,chunkEnd):
     mat = W3DMeshMaterial()
@@ -247,8 +247,7 @@ def ReadW3DMaterial(file,chunkEnd):
         subChunkEnd = file.tell()+chunkSize
 
         if chunkType == 44:
-            mat.name = ReadString(file)
-            print(mat.name)
+            mat.vmName = ReadString(file)
         elif chunkType == 45:
             vmInf = W3DVertexMaterial()
             vmInf.attributes = ReadLong(file)
@@ -260,13 +259,11 @@ def ReadW3DMaterial(file,chunkEnd):
             vmInf.opacity = ReadFloat(file)
             vmInf.translucency = ReadFloat(file)
             mat.vmInfo = vmInf
-            print(mat.vmInfo)
         elif chunkType == 46:
             mat.vmArgs0 = ReadString(file)
         elif chunkType == 47:
             mat.vmArgs1 = ReadString(file)
         else:
-            print(chunkType)
             file.seek(chunkSize,1)
 
     return mat
@@ -281,7 +278,6 @@ def ReadMeshMaterialArray(file,chunkEnd):
         if chunkType == 43:
             Mats.append(ReadW3DMaterial(file,subChunkEnd))
         else:
-            print(chunkType)
             file.seek(chunkSize,1)
     return Mats
 
@@ -503,7 +499,7 @@ def ReadMesh(file,chunkEnd):
             file.seek(Chunksize,1)
 
     return W3DMesh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals,vertInfs = [],faces = MeshFaces,userText = MeshUsertext,
-                shadeIds = MeshShadeIds, matlheader = [],shaders = [],vertMatls = [], textures = MeshTextures, matlPass = MeshMaterialPass)
+                shadeIds = MeshShadeIds, matlheader = [],shaders = [],vertMatls = MeshVerticeMats , textures = MeshTextures, matlPass = MeshMaterialPass)
 
 
     #reads the file and get chunks and do all the other stuff
@@ -579,9 +575,37 @@ def MainImport(givenfilepath,self, context):
                 index+=1
 
         bm.to_mesh(mesh)
-        print(len(m.textures))
+
+        for vm in m.vertMatls:
+            print(vm.vmName)
+            mat = bpy.data.materials.new(vm.vmName)
+            mat.use_shadeless = True
+            mesh.materials.append(mat)
+
         for tex in m.textures:
             print(tex.name)
+            basename = os.path.splitext(tex.name)[0]
+            tgapath = os.path.dirname(givenfilepath)+"/"+basename+".tga"
+            ddspath = os.path.dirname(givenfilepath)+"/"+basename+".dds"
+
+            try:
+                img = bpy.data.images.load(tgapath)
+                print(tgapath)
+            except:
+                try:
+                    img = bpy.data.images.load(ddspath)
+                    print(ddspath)
+                except:
+                    print("Cannot load image %s" % os.path.dirname(givenfilepath)+"/"+basename)
+
+            # Create image texture from image
+            cTex = bpy.data.textures.new(tex.name, type = 'IMAGE')
+            cTex.image = img
+
+            mTex = mesh.materials[0].texture_slots.add()
+            mTex.texture = cTex
+            mTex.texture_coords = 'UV'
+            mTex.mapping = 'FLAT'
 
         mesh_ob = bpy.data.objects.new(m.header.meshName,mesh)
         bpy.context.scene.objects.link(mesh_ob) # Link the object to the active scene
