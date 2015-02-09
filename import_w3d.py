@@ -173,28 +173,23 @@ def ReadFloat(file):
     #binary_format = "<f" float
     return (struct.unpack("f",file.read(4))[0])
 
-def ReadHierarchy(dp,file,chunkEnd):
-    dp.write("Read:Hierarchy\n")
+def ReadHierarchy(file,chunkEnd):
     while file.tell() < chunkEnd:
         file.read(4)
 
-def ReadAABox(dp,file,chunkEnd):
-    dp.write("Read:AABOX\n")
+def ReadAABox(file,chunkEnd):
     while file.tell() < chunkEnd:
         file.read(4)
 
-def ReadCompressed_Animation(dp,file,chunkEnd):
-    dp.write("Read:Compressed_Animation\n")
+def ReadCompressed_Animation(file,chunkEnd):
     while file.tell() < chunkEnd:
         file.read(4)
 
-def ReadHLod(dp,file,chunkEnd):
-    dp.write("Read:HLod\n")
+def ReadHLod(file,chunkEnd):
     while file.tell() < chunkEnd:
         file.read(4)
 
-def ReadAnimation(dp,file,chunkEnd):
-    dp.write("Read:Animation\n")
+def ReadAnimation(file,chunkEnd):
     while file.tell() < chunkEnd:
         file.read(4)
 
@@ -212,9 +207,9 @@ def ReadMeshTextureStage(file,chunkEnd):
         TextureIds = []
         TextureCoords = []
         if chunkType == 73:
-                TextureIds = ReadLongArray(file,subChunkEnd)
+            TextureIds = ReadLongArray(file,subChunkEnd)
         elif chunkType == 74:
-                TextureCoords = ReadMeshTextureCoordArray(file,subChunkEnd)
+            TextureCoords = ReadMeshTextureCoordArray(file,subChunkEnd)
         else:
             file.seek(chunkSize,1)
 
@@ -528,27 +523,26 @@ def MainImport(givenfilepath,self, context):
         if data == 0:
             Meshes.append(ReadMesh(file, chunkEnd))
             CM = Meshes[len(Meshes)-1]
-            CM.header.meshName,CM.header.containerName,CM.header.faceCount,CM.header.vertCount))
             file.seek(chunkEnd,0)
 
         elif data == 256:
-            ReadHierarchy(dp,file, chunkEnd)
+            ReadHierarchy(file, chunkEnd)
             file.seek(chunkEnd,0)
 
         elif data == 512:
-            ReadAnimation(dp,file,chunkEnd)
+            ReadAnimation(file,chunkEnd)
             file.seek(chunkEnd,0)
 
         elif data == 680:
-            ReadCompressed_Animation(dp,file,chunkEnd)
+            ReadCompressed_Animation(file,chunkEnd)
             file.seek(chunkEnd,0)
 
         elif data == 1792:
-            ReadHLod(dp,file,chunkEnd)
+            ReadHLod(file,chunkEnd)
             file.seek(chunkEnd,0)
 
         elif data == 1856:
-            ReadAABox(dp,file,chunkEnd)
+            ReadAABox(file,chunkEnd)
             file.seek(chunkEnd,0)
 
         else:
