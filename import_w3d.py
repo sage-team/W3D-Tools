@@ -514,59 +514,40 @@ def ReadMesh(file,chunkEnd):
     #reads the file and get chunks and do all the other stuff
 def MainImport(givenfilepath,self, context):
     file = open(givenfilepath,"rb")
-    dp = open(givenfilepath + "_debug.txt","w")# debugprotocoll
-    dp.write("################################################ \n")
     file.seek(0,2)
     filesize = file.tell()
     file.seek(0,0)
-    dp.write("Filesize of the modell is %s bytes \n" % filesize)
     Chunknumber = 1
     Meshes = []
 
     while file.tell() < filesize:
         data = ReadLong(file)
-        dp.write("----------------------------------------------\n")
-        dp.write("%i. Byte No. %i \n" % (Chunknumber, file.tell()))
         Chunksize =  GetChunkSize(ReadLong(file))
         chunkEnd = file.tell() + Chunksize
-        dp.write("----------------------------------------------\n")
 
         if data == 0:
-            dp.write("||||Mesh_Chunk||||\n")
-            dp.write("Chunksize = %i \n" % GetChunkSize(int(data)))
             Meshes.append(ReadMesh(file, chunkEnd))
             CM = Meshes[len(Meshes)-1]
-            dp.write("---Header---:\nVerion:%s\nName:%s\nContainer-Name:%s\nFace-Count:%s\nVertice-Count:%s\n"%(CM.header.version,
             CM.header.meshName,CM.header.containerName,CM.header.faceCount,CM.header.vertCount))
             file.seek(chunkEnd,0)
 
         elif data == 256:
-            dp.write("Hierarchy_Chunk \n")
-            dp.write ("Chunksize = %i \n"  % GetChunkSize(int(data)))
             ReadHierarchy(dp,file, chunkEnd)
             file.seek(chunkEnd,0)
 
         elif data == 512:
-            dp.write("Animation_Chunk \n")
-            dp.write("Chunksize = %i \n"  % GetChunkSize(int(data)))
             ReadAnimation(dp,file,chunkEnd)
             file.seek(chunkEnd,0)
 
         elif data == 680:
-            dp.write("Compressed_Animation_Chunk \n")
-            dp.write("Chunksize = %i \n"  % GetChunkSize(int(data)))
             ReadCompressed_Animation(dp,file,chunkEnd)
             file.seek(chunkEnd,0)
 
         elif data == 1792:
-            dp.write("HLod_Chunk \n")
-            dp.write("Chunksize = %i \n" % GetChunkSize(int(data)))
             ReadHLod(dp,file,chunkEnd)
             file.seek(chunkEnd,0)
 
         elif data == 1856:
-            dp.write("AABox_Chunk")
-            dp.write("Chunksize = %i \n" % GetChunkSize(int(data)))
             ReadAABox(dp,file,chunkEnd)
             file.seek(chunkEnd,0)
 
@@ -575,9 +556,7 @@ def MainImport(givenfilepath,self, context):
 
         Chunknumber += 1
 
-    dp.write("####################################################")
     file.close()
-    dp.close()
 
     for m in Meshes:
         Vertices = m.verts
