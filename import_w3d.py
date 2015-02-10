@@ -191,7 +191,7 @@ def ReadMeshMaterialSetInfo (file):
     return result
 
 def ReadTexture(file,chunkEnd):
-    tex = struct_w3d.W3DTexture()
+    tex = struct_w3d.Tex()
     while file.tell() < chunkEnd:
         Chunktype = ReadLong(file)
         Chunksize = GetChunkSize(ReadLong(file))
@@ -200,7 +200,7 @@ def ReadTexture(file,chunkEnd):
         if Chunktype == 50:
             tex.name = ReadString(file)
         elif Chunktype == 51:
-            tex.textureInfo = struct_w3d.TexInfo(attributes=ReadShort(file),
+            tex.textureInfo = struct_w3d.W3DTextureInfo(attributes=ReadShort(file),
                 animType=ReadShort(file),frameCount=ReadLong(file),frameRate=ReadFloat(file))
         else:
             file.seek(Chunksize,1)
