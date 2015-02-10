@@ -8,7 +8,7 @@ import os
 import sys
 import bmesh
 from bpy.props import *
-from . import w3d_struct
+from . import struct_w3d
 
 def ReadString(file):
     bytes = []
@@ -25,7 +25,7 @@ def ReadFixedString(file):
 
 
 def ReadRGBA(file):
-    return RGBA(r=file.read(1),g=file.read(1),b=file.read(1),a=file.read(1))
+    return struct_w3d.RGBA(r=file.read(1),g=file.read(1),b=file.read(1),a=file.read(1))
 
 def GetChunkSize(data):
     return (data & int(0x7FFFFFFF))
@@ -88,12 +88,12 @@ def ReadMeshTextureStage(file,chunkEnd):
         else:
             file.seek(chunkSize,1)
 
-    return W3DMeshTextureStage(txIds = TextureIds,txCoords = TextureCoords)
+    return struct_w3d.MshTexStage(txIds = TextureIds,txCoords = TextureCoords)
 
 def ReadMeshMaterialPass(file, chunkEnd):
     VertexMaterialIds = []
     ShaderIds = []
-    TextureStage = W3DMeshTextureStage()
+    TextureStage = struct_w3d.MshTexStage()
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
@@ -110,11 +110,11 @@ def ReadMeshMaterialPass(file, chunkEnd):
         else:
             file.seek(chunkSize,1)
 
-    return W3DMeshMaterialPass(vmIds = VertexMaterialIds,shaderIds = ShaderIds,txStage = TextureStage)
+    return struct_w3d.MshMatPass(vmIds = VertexMaterialIds,shaderIds = ShaderIds,txStage = TextureStage)
 
 
 def ReadW3DMaterial(file,chunkEnd):
-    mat = W3DMeshMaterial()
+    mat = struct_w3d.MshMat()
     while file.tell() < chunkEnd:
         #file.read(4)
         chunkType = ReadLong(file)
@@ -124,7 +124,7 @@ def ReadW3DMaterial(file,chunkEnd):
         if chunkType == 44:
             mat.vmName = ReadString(file)
         elif chunkType == 45:
-            vmInf = W3DVertexMaterial()
+            vmInf = struct_w3d.VtxMat()
             vmInf.attributes = ReadLong(file)
             vmInf.ambient = ReadRGBA(file)
             vmInf.diffuse = ReadRGBA(file)
@@ -180,18 +180,18 @@ def ReadMeshShaderArray(file, chunkEnd):
         file.read(4)
 
 def ReadMeshFace(file):
-    result = W3DMeshFace(vertIds = (ReadLong(file), ReadLong(file), ReadLong(file)),
+    result = struct_w3d.MshFace(vertIds = (ReadLong(file), ReadLong(file), ReadLong(file)),
     attrs = ReadLong(file),
     normal = (ReadFloat(file),ReadFloat(file), ReadFloat(file)),
     distance = ReadFloat(file))
     return result
 
 def ReadMeshMaterialSetInfo (file):
-    result = W3DMeshMaterialSetInfo(passCount = ReadLong(file), vertMatlCount = ReadLong(file), shaderCount = ReadLong(file), textureCount = ReadLong(file))
+    result = struct_w3d.MshMatSetInfo(passCount = ReadLong(file), vertMatlCount = ReadLong(file), shaderCount = ReadLong(file), textureCount = ReadLong(file))
     return result
 
 def ReadTexture(file,chunkEnd):
-    tex = W3DTexture()
+    tex = struct_w3d.W3DTexture()
     while file.tell() < chunkEnd:
         Chunktype = ReadLong(file)
         Chunksize = GetChunkSize(ReadLong(file))
@@ -200,7 +200,7 @@ def ReadTexture(file,chunkEnd):
         if Chunktype == 50:
             tex.name = ReadString(file)
         elif Chunktype == 51:
-            tex.textureInfo = W3DTextureInfo(attributes=ReadShort(file),
+            tex.textureInfo = struct_w3d.TexInfo(attributes=ReadShort(file),
                 animType=ReadShort(file),frameCount=ReadLong(file),frameRate=ReadFloat(file))
         else:
             file.seek(Chunksize,1)
@@ -221,7 +221,7 @@ def ReadTextureArray(file,chunkEnd):
     return textures
 
 def ReadMeshHeader(file):
-    result = W3DMeshHeader(version = ReadLong(file), attrs =  ReadLong(file), meshName = ReadFixedString(file),
+    result = struct_w3d.MshHeader(version = ReadLong(file), attrs =  ReadLong(file), meshName = ReadFixedString(file),
     containerName = ReadFixedString(file),faceCount = ReadLong(file),
     vertCount = ReadLong(file),matlCount = ReadLong(file),damageStageCount = ReadLong(file),sortLevel = ReadLong(file),
     prelitVersion = ReadLong(file) ,futureCount = ReadLong(file),
@@ -239,10 +239,10 @@ def ReadMesh(file,chunkEnd):
     MeshVertices = []
     MeshVerticeMats = []
     MeshNormals = []
-    MeshHeader = W3DMeshHeader()
-    MeshInfo = W3DMeshMaterialSetInfo()
+    MeshHeader = struct_w3d.MshHeader()
+    MeshInfo = struct_w3d.MshMatSetInfo()
     MeshFaces = []
-    MeshMaterialPass = W3DMeshMaterialPass()
+    MeshMaterialPass = struct_w3d.MshMatPass()
     MeshTriangles = []
     MeshShadeIds = []
     MeshMats = []
@@ -373,7 +373,7 @@ def ReadMesh(file,chunkEnd):
             print("Invalid Chunktype: %s" %Chunktype)
             file.seek(Chunksize,1)
 
-    return W3DMesh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals,vertInfs = [],faces = MeshFaces,userText = MeshUsertext,
+    return struct_w3d.Msh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals,vertInfs = [],faces = MeshFaces,userText = MeshUsertext,
                 shadeIds = MeshShadeIds, matlheader = [],shaders = [],vertMatls = MeshVerticeMats , textures = MeshTextures, matlPass = MeshMaterialPass)
 
 
