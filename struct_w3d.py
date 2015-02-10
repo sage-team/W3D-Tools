@@ -1,4 +1,5 @@
 #Struct
+
 class Struct:
     def __init__ (self, *argv, **argd):
         if len(argd):
@@ -22,24 +23,24 @@ class Quat(Struct):
     val3 = 0.0
     val4 = 0.0
 
-class HierarchyHeader(Struct):
+class HieraHeader(Struct):
     version = 0
     hierName = ""
     pivotCount = 0
     centerPos = 0
 
-class HierarchyPivot(Struct):
+class HieraPivot(Struct):
     pivotName = ""
     parentID = 0
     pos = (0, 0 ,0)
     eulerAngles =(0, 0 ,0)
     rotation = Quat(val1 = 0.0,val2 = 0.0,val3 = 0.0,val4 = 0.0)
 
-class Hierarchy(Struct):
-    header = HierarchyHeader()
-    pivots = HierarchyPivot()
+class Hiera(Struct):
+    header = HieraHeader()
+    pivots = HieraPivot()
 
-class W3DVertexMaterial(Struct):
+class VtxMat(Struct):
     attributes = 0   #uint32
     ambient = RGBA() #alpha is only padding in this and below
     diffuse = RGBA()
@@ -49,38 +50,38 @@ class W3DVertexMaterial(Struct):
     opacity  = 0.0       #how opaque the material is, 0.0 = invisible, 1.0 = fully opaque (default = 1) -float
     translucency = 0.0   #how much light passes through the material. (default = 0) -float
 
-class W3DMeshMaterialSetInfo(Struct):
+class MshMatSetInfo(Struct):
     passCount = 0
     vertMatlCount = 0
     shaderCount = 0
     TextureCount = 0
 
-class W3DMeshFace(Struct):
+class MshFace(Struct):
     vertIds = (0, 0 ,0)
     attrs = 0
     normal = (0, 0 ,0)
     distance = 0.0
 
-class W3DMeshTextureStage(Struct):
+class MshTexStage(Struct):
     txIds = []
     txCoords = []
 
-class W3DMeshMaterialPass(Struct):
+class MshMatPass(Struct):
     vmIds = 0
     shaderIds = 0
-    txStage = W3DMeshTextureStage()
+    txStage = MshTexStage()
 
-class W3DMeshMaterial(Struct):
+class MshMat(Struct):
     vmName = ""
-    vmInfo = W3DVertexMaterial()
+    vmInfo = VtxMat()
     vmArgs0 = ""
     vmArgs1 = ""
 
-class W3DMeshTexture(Struct):
+class MshTex(Struct):
     txfilename = ""
     txinfo = ""
 
-class W3DMeshHeader(Struct):
+class MshHeader(Struct):
     version = 0
     attrs = 0
     meshName = ""
@@ -100,19 +101,19 @@ class W3DMeshHeader(Struct):
     sphRadius = 0.0
     userText  = ""
 
-class W3DTextureInfo(Struct):
+class TexInfo(Struct):
     attributes = 0 #uint16
     animType = 0 #uint16
     frameCount = 0 #uint32
     frameRate = 0.0 #float32
 
-class W3DTexture(Struct):
+class Tex(Struct):
     linkMap = 0
     name = ""
-    textureInfo = W3DTextureInfo()
+    textureInfo = TexInfo()
 
-class W3DMesh(Struct):
-    header = W3DMeshHeader()
+class Msh(Struct):
+    header = MshHeader()
     verts = []
     normals = []
     vertInfs = []
@@ -122,4 +123,4 @@ class W3DMesh(Struct):
     shaders = []
     vertMatls = []
     textures = []
-    matlPass = W3DMeshMaterialPass()
+    matlPass = MshMatPass()

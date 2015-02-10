@@ -36,6 +36,7 @@ if "bpy" in locals():
     import imp
     if 'import_w3d' in locals():
         imp.reload(import_w3d)
+        imp.reload(struct_w3d)
 
 import time
 import datetime
