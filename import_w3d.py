@@ -587,23 +587,28 @@ def MainImport(givenfilepath,self, context):
             basename = os.path.splitext(tex.name)[0]
             tgapath = os.path.dirname(givenfilepath)+"/"+basename+".tga"
             ddspath = os.path.dirname(givenfilepath)+"/"+basename+".dds"
-
+            found_img = False
             try:
                 img = bpy.data.images.load(tgapath)
                 print(tgapath)
+                found_img = True
             except:
                 try:
                     img = bpy.data.images.load(ddspath)
                     print(ddspath)
+                    found_img = True
                 except:
                     print("Cannot load image %s" % os.path.dirname(givenfilepath)+"/"+basename)
 
-            # Create image texture from image
-            cTex = bpy.data.textures.new(tex.name, type = 'IMAGE')
-            cTex.image = img
-
+            # Create material
             mTex = mesh.materials[0].texture_slots.add()
-            mTex.texture = cTex
+
+            # Create image texture from image
+            if found_img == True:
+                cTex = bpy.data.textures.new(tex.name, type = 'IMAGE')
+                cTex.image = img
+                mTex.texture = cTex
+
             mTex.texture_coords = 'UV'
             mTex.mapping = 'FLAT'
 
