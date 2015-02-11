@@ -200,7 +200,7 @@ def ReadTexture(file,chunkEnd):
         if Chunktype == 50:
             tex.name = ReadString(file)
         elif Chunktype == 51:
-            tex.textureInfo = struct_w3d.TexInfo(attributes=ReadShort(file),
+            tex.textureInfo = struct_w3d.W3DTextureInfo(attributes=ReadShort(file),
                 animType=ReadShort(file),frameCount=ReadLong(file),frameRate=ReadFloat(file))
         else:
             file.seek(Chunksize,1)
