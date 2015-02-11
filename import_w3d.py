@@ -191,7 +191,7 @@ def ReadMeshMaterialSetInfo (file):
     return result
 
 def ReadTexture(file,chunkEnd):
-    tex = struct_w3d.W3DTexture()
+    tex = struct_w3d.Tex()
     while file.tell() < chunkEnd:
         Chunktype = ReadLong(file)
         Chunksize = GetChunkSize(ReadLong(file))
