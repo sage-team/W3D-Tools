@@ -599,6 +599,7 @@ def MainImport(givenfilepath,self, context):
                         #location = (location[0] + pivot.pos[0], location[1] + pivot.pos[1], location[2] + pivot.pos[2])
                         #rotation_euler = (rotation_euler[0] + pivot.eulerAngles[0], rotation_euler[1] + pivot.eulerAngles[1], rotation_euler[2] + pivot.eulerAngles[2])
                         #rotation_quaternion = (rotation_quaternion[0] + pivot.rotation.val1, rotation_quaternion[1] + pivot.rotation.val2, rotation_quaternion[2] + pivot.rotation.val3, rotation_quaternion[3] + pivot.rotation.val4)
+                    mesh_ob.rotation_mode = 'ZYX'
                     mesh_ob.location = location
                     mesh_ob.rotation_euler = rotation_euler
                     mesh_ob.rotation_quaternion = rotation_quaternion
