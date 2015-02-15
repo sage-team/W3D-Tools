@@ -18,11 +18,10 @@ def ReadString(file):
         b = file.read(1)
 
     return (b"".join(bytes)).decode("utf-8")
-
+	
 def ReadFixedString(file):
     SplitString = ((str(file.read(16)))[2:16]).split("\\")
     return SplitString[0]
-
 
 def ReadRGBA(file):
     return struct_w3d.RGBA(r=file.read(1),g=file.read(1),b=file.read(1),a=file.read(1))
@@ -47,10 +46,57 @@ def ReadLongArray(file,chunkEnd):
 def ReadFloat(file):
     #binary_format = "<f" float
     return (struct.unpack("f",file.read(4))[0])
-
-def ReadHierarchy(file,chunkEnd):
+	
+def ReadHierarchyHeader(file, chunkEnd):
+    HieraHeader = struct_w3d.HieraHeader()
+    HieraHeader.version = ReadLong(file)
+    HieraHeader.hierName = ReadFixedString(file)
+    HieraHeader.pivotCount = ReadLong(file)
+    HieraHeader.centerPos = (ReadFloat(file), ReadFloat(file), ReadFloat(file))
+	
+    return HieraHeader
+	
+def ReadPivots(file, chunkEnd):
+    pivots = [] 
+    print("pivots reading")
     while file.tell() < chunkEnd:
-        file.read(4)
+        pivot = struct_w3d.HieraPivot()
+        pivot.pivotName = ReadFixedString(file)
+        pivot.parentID = ReadLong(file)
+        pivot.pos = (ReadFloat(file), ReadFloat(file) ,ReadFloat(file))
+        pivot.eulerAngles = (ReadFloat(file), ReadFloat(file) ,ReadFloat(file))
+        pivot.rotation = struct_w3d.Quat(val1 = ReadFloat(file),val2 = ReadFloat(file),val3 = ReadFloat(file),val4 = ReadFloat(file))
+        
+        pivots.append(pivot)
+    return pivots
+
+def ReadPivotFixups(file, chunkEnd):
+    pivot_fixups = []
+    while file.tell() < chunkEnd:
+        pivot_fixup = (ReadFloat(file), ReadFloat(file), ReadFloat(file))
+        pivot_fixups.append(pivot_fixup)
+    return pivot_fixups
+	
+def ReadHierarchy(file,chunkEnd):
+    HieraHeader = struct_w3d.HieraHeader()
+    Pivots = []
+    Pivot_fixups = []
+	
+    while file.tell() < chunkEnd:
+        chunkType = ReadLong(file)
+        chunkSize = GetChunkSize(ReadLong(file))
+        subChunkEnd = file.tell() + chunkSize
+        
+        if chunkType == 257:
+            HieraHeader = ReadHierarchyHeader(file, subChunkEnd)
+        elif chunkType == 258:
+            Pivots = ReadPivots(file, subChunkEnd)
+        elif chunkType == 259:
+            Pivot_fixups = ReadPivotFixups(file, subChunkEnd)
+        else:
+            file.seek(chunkSize, 1)
+			
+    return struct_w3d.Hiera(header = HieraHeader, pivots = Pivots, pivot_fixups = Pivot_fixups)
 
 def ReadAABox(file,chunkEnd):
     while file.tell() < chunkEnd:
@@ -59,10 +105,32 @@ def ReadAABox(file,chunkEnd):
 def ReadCompressed_Animation(file,chunkEnd):
     while file.tell() < chunkEnd:
         file.read(4)
-
-def ReadHLod(file,chunkEnd):
+		
+def ReadHLodHeader(file,chunkEnd):
+    HLodHeader = struct_w3d.HLodHeader()
     while file.tell() < chunkEnd:
         file.read(4)
+        #HLodHeader.version = ReadLong(file)
+        #HLodHeader.
+    return HLodHeader
+
+def ReadHLod(file,chunkEnd):
+    #1793, 1794, 1795, 1796
+    print("####hlod###")
+	
+    HLodHeader = struct_w3d.HLodHeader()
+    while file.tell() < chunkEnd:
+        chunkType = ReadLong(file)
+        chunkSize = GetChunkSize(ReadLong(file))
+        subChunkEnd = file.tell() + chunkSize
+		
+        if chunkType == 1793:
+            HLodHeader = ReadHLodHeader(file, subChunkEnd)
+        else:
+            file.seek(chunkSize, 1)
+		
+        file.read(4)
+    return struct_w3d.HLod(header = HLodHeader)
 
 def ReadAnimation(file,chunkEnd):
     while file.tell() < chunkEnd:
@@ -328,7 +396,6 @@ def ReadMesh(file,chunkEnd):
                 print("Mistake while reading MeshShadeIds (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
-
         elif Chunktype == 40:
             try:
                 MeshInfo = ReadMeshMaterialSetInfo(file)
@@ -385,6 +452,7 @@ def MainImport(givenfilepath,self, context):
     file.seek(0,0)
     Chunknumber = 1
     Meshes = []
+    Hierarchy = struct_w3d.Hiera()
 
     while file.tell() < filesize:
         data = ReadLong(file)
@@ -397,7 +465,8 @@ def MainImport(givenfilepath,self, context):
             file.seek(chunkEnd,0)
 
         elif data == 256:
-            ReadHierarchy(file, chunkEnd)
+            print("hierachy data")
+            Hierarchy = ReadHierarchy(file, chunkEnd)
             file.seek(chunkEnd,0)
 
         elif data == 512:
@@ -423,7 +492,7 @@ def MainImport(givenfilepath,self, context):
 
     file.close()
 
-    for m in Meshes:
+    for m in Meshes:		
         Vertices = m.verts
         Faces = []
 
@@ -489,6 +558,22 @@ def MainImport(givenfilepath,self, context):
 
         mesh_ob = bpy.data.objects.new(m.header.meshName,mesh)
         bpy.context.scene.objects.link(mesh_ob) # Link the object to the active scene
+		
+        #print ("##########")
+        if Hierarchy.header.pivotCount > 0:
+            for pivot in Hierarchy.pivots:
+                if m.header.meshName == pivot.pivotName: 
+                    location = pivot.pos
+                    rotation_euler = pivot.eulerAngles
+                    rotation_quaternion = (pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3, pivot.rotation.val4)
+                    #while (pivot.parentID > -1) and (pivot.parentID < Hierarchy.header.pivotCount - 1):
+                        #pivot = Hierarchy.pivots[pivot.parentID]
+                        #location = (location[0] + pivot.pos[0], location[1] + pivot.pos[1], location[2] + pivot.pos[2])
+                        #rotation_euler = (rotation_euler[0] + pivot.eulerAngles[0], rotation_euler[1] + pivot.eulerAngles[1], rotation_euler[2] + pivot.eulerAngles[2])
+                        #rotation_quaternion = (rotation_quaternion[0] + pivot.rotation.val1, rotation_quaternion[1] + pivot.rotation.val2, rotation_quaternion[2] + pivot.rotation.val3, rotation_quaternion[3] + pivot.rotation.val4)
+                    mesh_ob.location = location
+                    mesh_ob.rotation_euler = rotation_euler
+                    mesh_ob.rotation_quaternion = rotation_quaternion
 
 class W3DImporter(bpy.types.Operator):
     '''Import from W3D File Format (.w3d)'''

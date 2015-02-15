@@ -27,7 +27,7 @@ class HieraHeader(Struct):
     version = 0
     hierName = ""
     pivotCount = 0
-    centerPos = 0
+    centerPos = (0.0, 0.0 ,0.0)
 
 class HieraPivot(Struct):
     pivotName = ""
@@ -39,6 +39,22 @@ class HieraPivot(Struct):
 class Hiera(Struct):
     header = HieraHeader()
     pivots = HieraPivot()
+    pivot_fixups = []
+	
+class HLodHeader(Struct):
+    version = 0
+    lodCount = 0
+    modelName = ""
+    HTreeName = ""
+	
+class HLodArray(Struct):
+    test = 0
+
+    
+class HLod(Struct):
+    header = HLodHeader()
+    #lodArray = HLodArray()
+    
 
 class VtxMat(Struct):
     attributes = 0   #uint32
