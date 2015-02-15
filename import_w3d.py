@@ -47,7 +47,7 @@ def ReadFloat(file):
     #binary_format = "<f" float
     return (struct.unpack("f",file.read(4))[0])
 	
-def ReadHierarchyHeader(file, chunkEnd):
+def ReadHierarchyHeader(file):
     HieraHeader = struct_w3d.HieraHeader()
     HieraHeader.version = ReadLong(file)
     HieraHeader.hierName = ReadFixedString(file)
@@ -58,14 +58,13 @@ def ReadHierarchyHeader(file, chunkEnd):
 	
 def ReadPivots(file, chunkEnd):
     pivots = [] 
-    print("pivots reading")
     while file.tell() < chunkEnd:
         pivot = struct_w3d.HieraPivot()
         pivot.pivotName = ReadFixedString(file)
         pivot.parentID = ReadLong(file)
         pivot.pos = (ReadFloat(file), ReadFloat(file) ,ReadFloat(file))
-        pivot.eulerAngles = (ReadFloat(file), ReadFloat(file) ,ReadFloat(file))
-        pivot.rotation = struct_w3d.Quat(val1 = ReadFloat(file),val2 = ReadFloat(file),val3 = ReadFloat(file),val4 = ReadFloat(file))
+        pivot.eulerAngles = (ReadFloat(file), ReadFloat(file), ReadFloat(file))
+        pivot.rotation = struct_w3d.Quat(val1 = ReadFloat(file), val2 = ReadFloat(file),val3 = ReadFloat(file),val4 = ReadFloat(file))
         
         pivots.append(pivot)
     return pivots
@@ -88,7 +87,7 @@ def ReadHierarchy(file,chunkEnd):
         subChunkEnd = file.tell() + chunkSize
         
         if chunkType == 257:
-            HieraHeader = ReadHierarchyHeader(file, subChunkEnd)
+            HieraHeader = ReadHierarchyHeader(file)
         elif chunkType == 258:
             Pivots = ReadPivots(file, subChunkEnd)
         elif chunkType == 259:
@@ -106,31 +105,60 @@ def ReadCompressed_Animation(file,chunkEnd):
     while file.tell() < chunkEnd:
         file.read(4)
 		
-def ReadHLodHeader(file,chunkEnd):
+def ReadHLodHeader(file):
     HLodHeader = struct_w3d.HLodHeader()
-    while file.tell() < chunkEnd:
-        file.read(4)
-        #HLodHeader.version = ReadLong(file)
-        #HLodHeader.
+    HLodHeader.version = ReadLong(file)
+    HLodHeader.lodCount = ReadLong(file)
+    HLodHeader.modelName = ReadFixedString(file)
+    HLodHeader.HTreeName = ReadFixedString(file)
     return HLodHeader
-
-def ReadHLod(file,chunkEnd):
-    #1793, 1794, 1795, 1796
-    print("####hlod###")
 	
+def ReadHLodArrayHeader(file):
+    HLodArrayHeader = struct_w3d.HLodArrayHeader()
+    HLodArrayHeader.modelCount = ReadLong(file)
+    HLodArrayHeader.maxScreenSize = ReadFloat(file)
+    return HLodArrayHeader
+	
+def ReadHLodSubObject(file):
+    HLodSubObject = struct_w3d.HLodSubObject()
+    HLodSubObject.name = ReadFixedString(file)
+    HLodSubObject.boneIndex = ReadLong(file)
+    return HLodSubObject
+        
+
+def ReadHLodArray(file, chunkEnd):
+    HLodArrayHeader = struct_w3d.HLodArrayHeader()
+    HLodSubObjects = []
+    while file.tell() < chunkEnd:
+        chunkType = ReadLong(file)
+        chunkSize = GetChunkSize(ReadLong(file))
+        subChunkEnd = file.tell() + chunkSize
+		
+        if chunkType == 1795:
+            HLodArrayHeader = ReadHLodArrayHeader(file)
+        elif chunkType == 1796:
+            HLodSubObjects.append(ReadHLodSubObject(file))
+        else:
+            file.seek(chunkSize, 1)
+    return struct_w3d.HLodArray(header = HLodArrayHeader, subObjects = HLodSubObjects)
+            
+		
+def ReadHLod(file,chunkEnd):
     HLodHeader = struct_w3d.HLodHeader()
+    HLodArray = struct_w3d.HLodArray()
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
 		
         if chunkType == 1793:
-            HLodHeader = ReadHLodHeader(file, subChunkEnd)
+            HLodHeader = ReadHLodHeader(file)
+        elif chunkType == 1794:
+            HLodArray = ReadHLodArray(file, subChunkEnd)
         else:
             file.seek(chunkSize, 1)
 		
-        file.read(4)
-    return struct_w3d.HLod(header = HLodHeader)
+    return struct_w3d.HLod(header = HLodHeader, lodArray = HLodArray)
 
 def ReadAnimation(file,chunkEnd):
     while file.tell() < chunkEnd:
@@ -453,6 +481,7 @@ def MainImport(givenfilepath,self, context):
     Chunknumber = 1
     Meshes = []
     Hierarchy = struct_w3d.Hiera()
+    HLod = struct_w3d.HLod()
 
     while file.tell() < filesize:
         data = ReadLong(file)
@@ -465,7 +494,6 @@ def MainImport(givenfilepath,self, context):
             file.seek(chunkEnd,0)
 
         elif data == 256:
-            print("hierachy data")
             Hierarchy = ReadHierarchy(file, chunkEnd)
             file.seek(chunkEnd,0)
 
@@ -478,7 +506,7 @@ def MainImport(givenfilepath,self, context):
             file.seek(chunkEnd,0)
 
         elif data == 1792:
-            ReadHLod(file,chunkEnd)
+            HLod = ReadHLod(file,chunkEnd)
             file.seek(chunkEnd,0)
 
         elif data == 1856:

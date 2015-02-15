@@ -47,15 +47,22 @@ class HLodHeader(Struct):
     modelName = ""
     HTreeName = ""
 	
-class HLodArray(Struct):
-    test = 0
+class HLodArrayHeader(Struct):
+    modelCount = 0
+    maxScreenSize = 0.0
 
+class HLodSubObject(Struct):
+    name = ""
+    boneIndex = 0
+
+class HLodArray(Struct):
+    header = HLodArrayHeader()
+    subObjects = []
     
 class HLod(Struct):
     header = HLodHeader()
-    #lodArray = HLodArray()
+    lodArray = HLodArray()
     
-
 class VtxMat(Struct):
     attributes = 0   #uint32
     ambient = RGBA() #alpha is only padding in this and below
