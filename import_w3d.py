@@ -8,6 +8,7 @@ import os
 import sys
 import bmesh
 from bpy.props import *
+from mathutils import Vector, Matrix
 from . import struct_w3d
 
 def ReadString(file):
@@ -18,7 +19,7 @@ def ReadString(file):
         b = file.read(1)
 
     return (b"".join(bytes)).decode("utf-8")
-	
+
 def ReadFixedString(file):
     SplitString = ((str(file.read(16)))[2:16]).split("\\")
     return SplitString[0]
@@ -33,6 +34,10 @@ def ReadLong(file):
     #binary_format = "<l" long
     return (struct.unpack("<L",file.read(4))[0])
 
+def ReadSignedLong(file):
+    #binary_format = "<l" signed long
+    return (struct.unpack("<l",file.read(4))[0])
+
 def ReadShort(file):
     #binary_format = "<h" short
     return (struct.unpack("<H",file.read(2))[0])
@@ -46,26 +51,26 @@ def ReadLongArray(file,chunkEnd):
 def ReadFloat(file):
     #binary_format = "<f" float
     return (struct.unpack("f",file.read(4))[0])
-	
+
 def ReadHierarchyHeader(file):
     HieraHeader = struct_w3d.HieraHeader()
     HieraHeader.version = ReadLong(file)
     HieraHeader.hierName = ReadFixedString(file)
     HieraHeader.pivotCount = ReadLong(file)
     HieraHeader.centerPos = (ReadFloat(file), ReadFloat(file), ReadFloat(file))
-	
+
     return HieraHeader
-	
+
 def ReadPivots(file, chunkEnd):
-    pivots = [] 
+    pivots = []
     while file.tell() < chunkEnd:
         pivot = struct_w3d.HieraPivot()
         pivot.pivotName = ReadFixedString(file)
-        pivot.parentID = ReadLong(file)
+        pivot.parentID = ReadSignedLong(file)
         pivot.pos = (ReadFloat(file), ReadFloat(file) ,ReadFloat(file))
         pivot.eulerAngles = (ReadFloat(file), ReadFloat(file), ReadFloat(file))
         pivot.rotation = struct_w3d.Quat(val1 = ReadFloat(file), val2 = ReadFloat(file),val3 = ReadFloat(file),val4 = ReadFloat(file))
-        
+
         pivots.append(pivot)
     return pivots
 
@@ -75,17 +80,17 @@ def ReadPivotFixups(file, chunkEnd):
         pivot_fixup = (ReadFloat(file), ReadFloat(file), ReadFloat(file))
         pivot_fixups.append(pivot_fixup)
     return pivot_fixups
-	
+
 def ReadHierarchy(file,chunkEnd):
     HieraHeader = struct_w3d.HieraHeader()
     Pivots = []
     Pivot_fixups = []
-	
+
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
-        
+
         if chunkType == 257:
             HieraHeader = ReadHierarchyHeader(file)
         elif chunkType == 258:
@@ -94,7 +99,7 @@ def ReadHierarchy(file,chunkEnd):
             Pivot_fixups = ReadPivotFixups(file, subChunkEnd)
         else:
             file.seek(chunkSize, 1)
-			
+
     return struct_w3d.Hiera(header = HieraHeader, pivots = Pivots, pivot_fixups = Pivot_fixups)
 
 def ReadAABox(file,chunkEnd):
@@ -104,7 +109,7 @@ def ReadAABox(file,chunkEnd):
 def ReadCompressed_Animation(file,chunkEnd):
     while file.tell() < chunkEnd:
         file.read(4)
-		
+
 def ReadHLodHeader(file):
     HLodHeader = struct_w3d.HLodHeader()
     HLodHeader.version = ReadLong(file)
@@ -112,19 +117,19 @@ def ReadHLodHeader(file):
     HLodHeader.modelName = ReadFixedString(file)
     HLodHeader.HTreeName = ReadFixedString(file)
     return HLodHeader
-	
+
 def ReadHLodArrayHeader(file):
     HLodArrayHeader = struct_w3d.HLodArrayHeader()
     HLodArrayHeader.modelCount = ReadLong(file)
     HLodArrayHeader.maxScreenSize = ReadFloat(file)
     return HLodArrayHeader
-	
+
 def ReadHLodSubObject(file):
     HLodSubObject = struct_w3d.HLodSubObject()
     HLodSubObject.name = ReadFixedString(file)
     HLodSubObject.boneIndex = ReadLong(file)
     return HLodSubObject
-        
+
 
 def ReadHLodArray(file, chunkEnd):
     HLodArrayHeader = struct_w3d.HLodArrayHeader()
@@ -133,7 +138,7 @@ def ReadHLodArray(file, chunkEnd):
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
-		
+
         if chunkType == 1795:
             HLodArrayHeader = ReadHLodArrayHeader(file)
         elif chunkType == 1796:
@@ -141,8 +146,8 @@ def ReadHLodArray(file, chunkEnd):
         else:
             file.seek(chunkSize, 1)
     return struct_w3d.HLodArray(header = HLodArrayHeader, subObjects = HLodSubObjects)
-            
-		
+
+
 def ReadHLod(file,chunkEnd):
     HLodHeader = struct_w3d.HLodHeader()
     HLodArray = struct_w3d.HLodArray()
@@ -150,14 +155,14 @@ def ReadHLod(file,chunkEnd):
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
-		
+
         if chunkType == 1793:
             HLodHeader = ReadHLodHeader(file)
         elif chunkType == 1794:
             HLodArray = ReadHLodArray(file, subChunkEnd)
         else:
             file.seek(chunkSize, 1)
-		
+
     return struct_w3d.HLod(header = HLodHeader, lodArray = HLodArray)
 
 def ReadAnimation(file,chunkEnd):
@@ -473,7 +478,7 @@ def ReadMesh(file,chunkEnd):
 
 
     #reads the file and get chunks and do all the other stuff
-def MainImport(givenfilepath,self, context):
+def MainImport(givenfilepath, self, context):
     file = open(givenfilepath,"rb")
     file.seek(0,2)
     filesize = file.tell()
@@ -520,7 +525,69 @@ def MainImport(givenfilepath,self, context):
 
     file.close()
 
-    for m in Meshes:		
+	##skeleton stuff
+    print("###skeleton stuff")
+    if HLod.header.modelName != HLod.header.HTreeName:
+        sklpath = os.path.dirname(givenfilepath)+"/"+HLod.header.HTreeName+".w3d"
+        file = open(sklpath,"rb")
+        file.seek(0,2)
+        filesize = file.tell()
+        file.seek(0,0)
+        Chunknumber = 1
+
+        while file.tell() < filesize:
+            chunkType = ReadLong(file)
+            Chunksize =  GetChunkSize(ReadLong(file))
+            chunkEnd = file.tell() + Chunksize
+            if chunkType == 256:
+                Hierarchy = ReadHierarchy(file, chunkEnd)
+                file.seek(chunkEnd,0)
+            else:
+                file.seek(Chunksize,1)
+
+            Chunknumber += 1
+        file.close()
+
+	#create armature
+    amt = bpy.data.armatures.new(Hierarchy.header.hierName)
+    rig = bpy.data.objects.new('Armature', amt)
+    rig.location = Hierarchy.header.centerPos
+    rig.rotation_mode = 'ZYX'
+    rig.show_x_ray = True
+    amt.show_names = True
+    bpy.context.scene.objects.link(rig) # Link the object to the active scene
+    bpy.context.scene.objects.active = rig
+    bpy.context.scene.update()
+
+    if Hierarchy.header.pivotCount > 0:
+        #create bones
+        #bpy.ops.object.editmode_toggle()
+        bpy.ops.object.mode_set(mode = 'EDIT')
+        for pivot in Hierarchy.pivots:
+            bone = amt.edit_bones.new(pivot.pivotName)
+            if pivot.parentID != -1 and pivot.parentID < Hierarchy.header.pivotCount:
+                parent = amt.edit_bones[pivot.parentID]
+                bone.parent = parent
+                bone.head = parent.tail
+                bone.use_connect = True
+                (trans, rot, scale) = parent.matrix.decompose()
+            elif pivot.parentID == -1:
+                bone.head = Hierarchy.header.centerPos
+                #rot = Matrix.Translation((0,0,0))   quaternion.toMatrix()
+                #rot = Matrix.Translation()
+            bone.tail =  Vector(pivot.pos) + bone.head
+
+        #pose bones
+        bpy.ops.object.mode_set(mode = 'POSE')
+        for pivot in Hierarchy.pivots:
+            bone = rig.pose.bones[pivot.pivotName]
+            bone.rotation_mode = 'ZYX'
+            #bone.quat = pivot.rotation_quaternion
+            bone.rotation_euler.rotate_axis(pivot.rotation_quaternion)
+            #bone.rotation_euler.rotate_axis(axis, math.radians(angle))
+
+
+    for m in Meshes:
         Vertices = m.verts
         Faces = []
 
@@ -584,13 +651,12 @@ def MainImport(givenfilepath,self, context):
             mTex.texture_coords = 'UV'
             mTex.mapping = 'FLAT'
 
-        mesh_ob = bpy.data.objects.new(m.header.meshName,mesh)
+        mesh_ob = bpy.data.objects.new(m.header.meshName, mesh)
         bpy.context.scene.objects.link(mesh_ob) # Link the object to the active scene
-		
-        #print ("##########")
+
         if Hierarchy.header.pivotCount > 0:
             for pivot in Hierarchy.pivots:
-                if m.header.meshName == pivot.pivotName: 
+                if m.header.meshName == pivot.pivotName:
                     location = pivot.pos
                     rotation_euler = pivot.eulerAngles
                     rotation_quaternion = (pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3, pivot.rotation.val4)
