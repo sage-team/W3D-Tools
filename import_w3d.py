@@ -18,7 +18,7 @@ def ReadString(file):
         b = file.read(1)
 
     return (b"".join(bytes)).decode("utf-8")
-	
+
 def ReadFixedString(file):
     SplitString = ((str(file.read(16)))[2:16]).split("\\")
     return SplitString[0]
@@ -46,18 +46,18 @@ def ReadLongArray(file,chunkEnd):
 def ReadFloat(file):
     #binary_format = "<f" float
     return (struct.unpack("f",file.read(4))[0])
-	
+
 def ReadHierarchyHeader(file, chunkEnd):
     HieraHeader = struct_w3d.HieraHeader()
     HieraHeader.version = ReadLong(file)
     HieraHeader.hierName = ReadFixedString(file)
     HieraHeader.pivotCount = ReadLong(file)
     HieraHeader.centerPos = (ReadFloat(file), ReadFloat(file), ReadFloat(file))
-	
+
     return HieraHeader
-	
+
 def ReadPivots(file, chunkEnd):
-    pivots = [] 
+    pivots = []
     print("pivots reading")
     while file.tell() < chunkEnd:
         pivot = struct_w3d.HieraPivot()
@@ -66,7 +66,7 @@ def ReadPivots(file, chunkEnd):
         pivot.pos = (ReadFloat(file), ReadFloat(file) ,ReadFloat(file))
         pivot.eulerAngles = (ReadFloat(file), ReadFloat(file) ,ReadFloat(file))
         pivot.rotation = struct_w3d.Quat(val1 = ReadFloat(file),val2 = ReadFloat(file),val3 = ReadFloat(file),val4 = ReadFloat(file))
-        
+
         pivots.append(pivot)
     return pivots
 
@@ -76,17 +76,17 @@ def ReadPivotFixups(file, chunkEnd):
         pivot_fixup = (ReadFloat(file), ReadFloat(file), ReadFloat(file))
         pivot_fixups.append(pivot_fixup)
     return pivot_fixups
-	
+
 def ReadHierarchy(file,chunkEnd):
     HieraHeader = struct_w3d.HieraHeader()
     Pivots = []
     Pivot_fixups = []
-	
+
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
-        
+
         if chunkType == 257:
             HieraHeader = ReadHierarchyHeader(file, subChunkEnd)
         elif chunkType == 258:
@@ -95,7 +95,7 @@ def ReadHierarchy(file,chunkEnd):
             Pivot_fixups = ReadPivotFixups(file, subChunkEnd)
         else:
             file.seek(chunkSize, 1)
-			
+
     return struct_w3d.Hiera(header = HieraHeader, pivots = Pivots, pivot_fixups = Pivot_fixups)
 
 def ReadAABox(file,chunkEnd):
@@ -105,7 +105,7 @@ def ReadAABox(file,chunkEnd):
 def ReadCompressed_Animation(file,chunkEnd):
     while file.tell() < chunkEnd:
         file.read(4)
-		
+
 def ReadHLodHeader(file,chunkEnd):
     HLodHeader = struct_w3d.HLodHeader()
     while file.tell() < chunkEnd:
@@ -117,18 +117,18 @@ def ReadHLodHeader(file,chunkEnd):
 def ReadHLod(file,chunkEnd):
     #1793, 1794, 1795, 1796
     print("####hlod###")
-	
+
     HLodHeader = struct_w3d.HLodHeader()
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
-		
+
         if chunkType == 1793:
             HLodHeader = ReadHLodHeader(file, subChunkEnd)
         else:
             file.seek(chunkSize, 1)
-		
+
         file.read(4)
     return struct_w3d.HLod(header = HLodHeader)
 
@@ -161,7 +161,7 @@ def ReadMeshTextureStage(file,chunkEnd):
 def ReadMeshMaterialPass(file, chunkEnd):
     VertexMaterialIds = []
     ShaderIds = []
-    TextureStage = struct_w3d.MshTexStage()
+    TextureStage = []
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
@@ -172,10 +172,11 @@ def ReadMeshMaterialPass(file, chunkEnd):
         elif chunkType == 58:#Shader Ids
             shaderIds = ReadLongArray(file,subChunkEnd)
         elif chunkType == 72: #Texture Stage
-            TextureStage = ReadMeshTextureStage(file,subChunkEnd)
-        elif chunkType == 74: #Texture Coords
-            TextureStage.txCoords = ReadMeshTextureCoordArray(file,subChunkEnd)
+            TextureStage.append(ReadMeshTextureStage(file,subChunkEnd))
+        #elif chunkType == 74: #Texture Coords
+        #    TextureStage.txCoords.append(ReadMeshTextureCoordArray(file,subChunkEnd))
         else:
+            print("MaterialPass Fail")
             file.seek(chunkSize,1)
 
     return struct_w3d.MshMatPass(vmIds = VertexMaterialIds,shaderIds = ShaderIds,txStage = TextureStage)
@@ -492,7 +493,7 @@ def MainImport(givenfilepath,self, context):
 
     file.close()
 
-    for m in Meshes:		
+    for m in Meshes:
         Vertices = m.verts
         Faces = []
 
@@ -502,44 +503,43 @@ def MainImport(givenfilepath,self, context):
         #create the mash
         mesh = bpy.data.meshes.new(m.header.containerName)
         mesh.from_pydata(Vertices,[],Faces)
-        mesh.uv_textures.new("UVW")
+
         bm = bmesh.new()
-        bm.from_mesh(mesh)
 
-        #create the uv map
-        uv_layer = bm.loops.layers.uv.verify()
-        bm.faces.layers.tex.verify()
-
-        index = 0
-        if len(m.matlPass.txStage.txCoords)>0:
+        for uv in range(len(m.matlPass.txStage)):
+            mesh.uv_textures.new("UVW"+str(uv))
+            print("UVW"+str(uv))
+            bm.from_mesh(mesh)
+            #create the uv map
+            uv_layer = bm.loops.layers.uv.verify()
+            bm.faces.layers.tex.verify()
+            index = 0
             for f in bm.faces:
-                f.loops[0][uv_layer].uv = m.matlPass.txStage.txCoords[Faces[index][0]]
-                f.loops[1][uv_layer].uv = m.matlPass.txStage.txCoords[Faces[index][1]]
-                f.loops[2][uv_layer].uv = m.matlPass.txStage.txCoords[Faces[index][2]]
+                f.loops[0][uv_layer].uv = m.matlPass.txStage[uv].txCoords[Faces[index][0]]
+                f.loops[1][uv_layer].uv = m.matlPass.txStage[uv].txCoords[Faces[index][1]]
+                f.loops[2][uv_layer].uv = m.matlPass.txStage[uv].txCoords[Faces[index][2]]
                 index+=1
 
-        bm.to_mesh(mesh)
+            bm.to_mesh(mesh)
+
+
 
         for vm in m.vertMatls:
-            print(vm.vmName)
             mat = bpy.data.materials.new(vm.vmName)
             mat.use_shadeless = True
             mesh.materials.append(mat)
 
         for tex in m.textures:
-            print(tex.name)
             basename = os.path.splitext(tex.name)[0]
             tgapath = os.path.dirname(givenfilepath)+"/"+basename+".tga"
             ddspath = os.path.dirname(givenfilepath)+"/"+basename+".dds"
             found_img = False
             try:
                 img = bpy.data.images.load(tgapath)
-                print(tgapath)
                 found_img = True
             except:
                 try:
                     img = bpy.data.images.load(ddspath)
-                    print(ddspath)
                     found_img = True
                 except:
                     print("Cannot load image %s" % os.path.dirname(givenfilepath)+"/"+basename)
@@ -558,11 +558,11 @@ def MainImport(givenfilepath,self, context):
 
         mesh_ob = bpy.data.objects.new(m.header.meshName,mesh)
         bpy.context.scene.objects.link(mesh_ob) # Link the object to the active scene
-		
+
         #print ("##########")
         if Hierarchy.header.pivotCount > 0:
             for pivot in Hierarchy.pivots:
-                if m.header.meshName == pivot.pivotName: 
+                if m.header.meshName == pivot.pivotName:
                     location = pivot.pos
                     rotation_euler = pivot.eulerAngles
                     rotation_quaternion = (pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3, pivot.rotation.val4)

@@ -40,21 +40,21 @@ class Hiera(Struct):
     header = HieraHeader()
     pivots = HieraPivot()
     pivot_fixups = []
-	
+
 class HLodHeader(Struct):
     version = 0
     lodCount = 0
     modelName = ""
     HTreeName = ""
-	
+
 class HLodArray(Struct):
     test = 0
 
-    
+
 class HLod(Struct):
     header = HLodHeader()
     #lodArray = HLodArray()
-    
+
 
 class VtxMat(Struct):
     attributes = 0   #uint32
@@ -85,7 +85,7 @@ class MshTexStage(Struct):
 class MshMatPass(Struct):
     vmIds = 0
     shaderIds = 0
-    txStage = MshTexStage()
+    txStage = []
 
 class MshMat(Struct):
     vmName = ""
