@@ -40,22 +40,29 @@ class Hiera(Struct):
     header = HieraHeader()
     pivots = HieraPivot()
     pivot_fixups = []
-
+	
 class HLodHeader(Struct):
     version = 0
     lodCount = 0
     modelName = ""
     HTreeName = ""
+	
+class HLodArrayHeader(Struct):
+    modelCount = 0
+    maxScreenSize = 0.0
+
+class HLodSubObject(Struct):
+    name = ""
+    boneIndex = 0
 
 class HLodArray(Struct):
-    test = 0
-
-
+    header = HLodArrayHeader()
+    subObjects = []
+    
 class HLod(Struct):
     header = HLodHeader()
-    #lodArray = HLodArray()
-
-
+    lodArray = HLodArray()
+    
 class VtxMat(Struct):
     attributes = 0   #uint32
     ambient = RGBA() #alpha is only padding in this and below
@@ -85,7 +92,7 @@ class MshTexStage(Struct):
 class MshMatPass(Struct):
     vmIds = 0
     shaderIds = 0
-    txStage = []
+    txStage = MshTexStage()
 
 class MshMat(Struct):
     vmName = ""
