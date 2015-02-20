@@ -8,7 +8,7 @@ import os
 import sys
 import bmesh
 from bpy.props import *
-from mathutils import Vector, Matrix
+from mathutils import Vector, Matrix, Quaternion
 from . import struct_w3d
 
 def ReadString(file):
@@ -473,9 +473,31 @@ def ReadMesh(file,chunkEnd):
             print("Invalid Chunktype: %s" %Chunktype)
             file.seek(Chunksize,1)
 
-    return struct_w3d.Msh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals,vertInfs = [],faces = MeshFaces,userText = MeshUsertext,
+    return struct_w3d.Msh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals,vertInfs = MeshVerticesInfs,faces = MeshFaces,userText = MeshUsertext,
                 shadeIds = MeshShadeIds, matlheader = [],shaders = [],vertMatls = MeshVerticeMats , textures = MeshTextures, matlPass = MeshMaterialPass)
 
+def LoadSKL(givenfilepath, filename):
+    Hierarchy = struct_w3d.Hiera()
+    sklpath = os.path.dirname(givenfilepath) + "/" + filename + ".w3d"
+    file = open(sklpath,"rb")
+    file.seek(0,2)
+    filesize = file.tell()
+    file.seek(0,0)
+    Chunknumber = 1
+
+    while file.tell() < filesize:
+        chunkType = ReadLong(file)
+        Chunksize =  GetChunkSize(ReadLong(file))
+        chunkEnd = file.tell() + Chunksize
+        if chunkType == 256:
+            Hierarchy = ReadHierarchy(file, chunkEnd)
+            file.seek(chunkEnd,0)
+        else:
+            file.seek(Chunksize,1)
+
+        Chunknumber += 1
+    file.close()
+    return Hierarchy
 
     #reads the file and get chunks and do all the other stuff
 def MainImport(givenfilepath, self, context):
@@ -525,67 +547,10 @@ def MainImport(givenfilepath, self, context):
 
     file.close()
 
-	##skeleton stuff
-    print("###skeleton stuff")
+	
+	##load skl file if needed -> print error message to user
     if HLod.header.modelName != HLod.header.HTreeName:
-        sklpath = os.path.dirname(givenfilepath)+"/"+HLod.header.HTreeName+".w3d"
-        file = open(sklpath,"rb")
-        file.seek(0,2)
-        filesize = file.tell()
-        file.seek(0,0)
-        Chunknumber = 1
-
-        while file.tell() < filesize:
-            chunkType = ReadLong(file)
-            Chunksize =  GetChunkSize(ReadLong(file))
-            chunkEnd = file.tell() + Chunksize
-            if chunkType == 256:
-                Hierarchy = ReadHierarchy(file, chunkEnd)
-                file.seek(chunkEnd,0)
-            else:
-                file.seek(Chunksize,1)
-
-            Chunknumber += 1
-        file.close()
-
-	#create armature
-    amt = bpy.data.armatures.new(Hierarchy.header.hierName)
-    rig = bpy.data.objects.new('Armature', amt)
-    rig.location = Hierarchy.header.centerPos
-    rig.rotation_mode = 'ZYX'
-    rig.show_x_ray = True
-    amt.show_names = True
-    bpy.context.scene.objects.link(rig) # Link the object to the active scene
-    bpy.context.scene.objects.active = rig
-    bpy.context.scene.update()
-
-    if Hierarchy.header.pivotCount > 0:
-        #create bones
-        #bpy.ops.object.editmode_toggle()
-        bpy.ops.object.mode_set(mode = 'EDIT')
-        for pivot in Hierarchy.pivots:
-            bone = amt.edit_bones.new(pivot.pivotName)
-            if pivot.parentID != -1 and pivot.parentID < Hierarchy.header.pivotCount:
-                parent = amt.edit_bones[pivot.parentID]
-                bone.parent = parent
-                bone.head = parent.tail
-                bone.use_connect = True
-                (trans, rot, scale) = parent.matrix.decompose()
-            elif pivot.parentID == -1:
-                bone.head = Hierarchy.header.centerPos
-                #rot = Matrix.Translation((0,0,0))   quaternion.toMatrix()
-                #rot = Matrix.Translation()
-            bone.tail =  Vector(pivot.pos) + bone.head
-
-        #pose bones
-        bpy.ops.object.mode_set(mode = 'POSE')
-        for pivot in Hierarchy.pivots:
-            bone = rig.pose.bones[pivot.pivotName]
-            bone.rotation_mode = 'ZYX'
-            #bone.quat = pivot.rotation_quaternion
-            bone.rotation_euler.rotate_axis(pivot.rotation_quaternion)
-            #bone.rotation_euler.rotate_axis(axis, math.radians(angle))
-
+        Hierarchy = LoadSKL(givenfilepath, HLod.header.HTreeName)
 
     for m in Meshes:
         Vertices = m.verts
@@ -652,23 +617,85 @@ def MainImport(givenfilepath, self, context):
             mTex.mapping = 'FLAT'
 
         mesh_ob = bpy.data.objects.new(m.header.meshName, mesh)
+       
+        #hierarchy stuff and skeleton
+        if Hierarchy.header.pivotCount > 0:  
+            # mesh header attributes		
+            #        0      -> normal mesh
+			#        8192   -> normal mesh - two sided
+            #        32768  -> normal mesh - cast shadow		
+            #        131072 -> skin			
+			#        163840 -> skin - cast shadow
+            type = m.header.attrs
+            if type == 0 or type == 8192 or type == 32768:
+                for pivot in Hierarchy.pivots:
+                    if m.header.meshName == pivot.pivotName:
+                        location = pivot.pos
+                        rotation_euler = pivot.eulerAngles
+                        rotation_quaternion = (pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3, pivot.rotation.val4)
+                        mesh_ob.rotation_mode = 'ZYX'
+                        mesh_ob.location = location
+                        mesh_ob.rotation_euler = rotation_euler
+                        mesh_ob.rotation_quaternion = rotation_quaternion
+			
+			
+            elif type == 131072 or type == 163840:
+                amtName = HLod.header.HTreeName
+                amt = bpy.data.armatures.new(Hierarchy.header.hierName)
+                amt.show_names = True
+                rig = bpy.data.objects.new(amtName, amt)
+                rig.location = Hierarchy.header.centerPos
+                rig.rotation_mode = 'ZYX'
+                rig.show_x_ray = True
+                bpy.context.scene.objects.link(rig) # Link the object to the active scene
+                bpy.context.scene.objects.active = rig
+                bpy.ops.object.mode_set(mode = 'EDIT')
+                bpy.context.scene.update()	
+			
+                for pivot in Hierarchy.pivots:
+			        #roottransform is the position of the armature
+                    if pivot.parentID == -1:
+                        bpy.data.objects[amtName].location = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))
+				    #the pivots with the parent id 0 are no bones but offsets from the roottransform
+                    elif pivot.parentID == 0:
+                        print("do nothing")
+                    else:	 
+                        bone = amt.edit_bones.new(pivot.pivotName)
+                        bone.transform(rig.matrix_world)	
+                        if bone.vector.y >= 0:
+                            bone.roll = -bone.roll	
+                        try:
+                            parent = amt.edit_bones[Hierarchy.pivots[pivot.parentID].pivotName]
+                            bone.parent = parent
+                            bone.head = parent.tail
+                            bone.use_connect = True
+                            bone.use_inherit_rotation = True
+                            bone.use_inherit_scale = True
+                        except: 
+                            bone.head = Hierarchy.pivots[pivot.parentID].pos
+                            bone.use_connect = False
+						
+                        pivot_rot = Quaternion((pivot.rotation.val4,pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3))
+                        pivot_pos = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))
+                        bone.tail = bone.head + pivot_rot*pivot_pos 
+			     
+				#create vertex group for each bone/ pivot
+                for pivot in Hierarchy.pivots:
+                    mesh_ob.vertex_groups.new(pivot.pivotName)
+				 
+                vertIDs = []
+                weight = 1.0 #in range 0.0 to 1.0
+                boneID = m.vertInfs[0]
+                for i in range(len(m.vertInfs)):
+                    if m.vertInfs[i] == boneID:
+                        vertIDs.append(i)
+                    else:
+                        mesh_ob.vertex_groups[boneID].add(vertIDs, weight, 'REPLACE')
+                        boneID = m.vertInfs[i]
+                        vertIDs = []	
+            else:
+                context.report({'ERROR'}, "unsupported meshtype attribute: %i" %type)
         bpy.context.scene.objects.link(mesh_ob) # Link the object to the active scene
-
-        if Hierarchy.header.pivotCount > 0:
-            for pivot in Hierarchy.pivots:
-                if m.header.meshName == pivot.pivotName:
-                    location = pivot.pos
-                    rotation_euler = pivot.eulerAngles
-                    rotation_quaternion = (pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3, pivot.rotation.val4)
-                    #while (pivot.parentID > -1) and (pivot.parentID < Hierarchy.header.pivotCount - 1):
-                        #pivot = Hierarchy.pivots[pivot.parentID]
-                        #location = (location[0] + pivot.pos[0], location[1] + pivot.pos[1], location[2] + pivot.pos[2])
-                        #rotation_euler = (rotation_euler[0] + pivot.eulerAngles[0], rotation_euler[1] + pivot.eulerAngles[1], rotation_euler[2] + pivot.eulerAngles[2])
-                        #rotation_quaternion = (rotation_quaternion[0] + pivot.rotation.val1, rotation_quaternion[1] + pivot.rotation.val2, rotation_quaternion[2] + pivot.rotation.val3, rotation_quaternion[3] + pivot.rotation.val4)
-                    mesh_ob.rotation_mode = 'ZYX'
-                    mesh_ob.location = location
-                    mesh_ob.rotation_euler = rotation_euler
-                    mesh_ob.rotation_quaternion = rotation_quaternion
 
 class W3DImporter(bpy.types.Operator):
     '''Import from W3D File Format (.w3d)'''
