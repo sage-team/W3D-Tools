@@ -478,7 +478,7 @@ def ReadMesh(file,chunkEnd):
 
 def LoadSKL(givenfilepath, filename):
     Hierarchy = struct_w3d.Hiera()
-    sklpath = os.path.dirname(givenfilepath) + "/" + filename + ".w3d"
+    sklpath = os.path.dirname(givenfilepath) + "/" + filename.lower() + ".w3d"
     file = open(sklpath,"rb")
     file.seek(0,2)
     filesize = file.tell()
@@ -653,32 +653,32 @@ def MainImport(givenfilepath, self, context):
                 bpy.context.scene.update()	
 			
                 for pivot in Hierarchy.pivots:
-			        #roottransform is the position of the armature
+                    pivot_pos = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))
+                    pivot_rot = Quaternion((pivot.rotation.val3,pivot.rotation.val2, pivot.rotation.val1, pivot.rotation.val4))					
                     if pivot.parentID == -1:
-                        bpy.data.objects[amtName].location = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))
-				    #the pivots with the parent id 0 are no bones but offsets from the roottransform
-                    elif pivot.parentID == 0:
-                        print("do nothing")
+                        #roottransform is the position of the armature
+                        bpy.data.objects[amtName].location = pivot_pos
+                    elif pivot.parentID == 0:		
+                        bone = amt.edit_bones.new(pivot.pivotName)
+                        bone.transform(rig.matrix_world)
+                        bone.head = pivot_pos
+                        bone.tail = bone.head + pivot_rot*Vector((-0.001, 0.0, 0.0))
                     else:	 
                         bone = amt.edit_bones.new(pivot.pivotName)
                         bone.transform(rig.matrix_world)	
                         if bone.vector.y >= 0:
                             bone.roll = -bone.roll	
-                        try:
-                            parent = amt.edit_bones[Hierarchy.pivots[pivot.parentID].pivotName]
-                            bone.parent = parent
-                            bone.head = parent.tail
-                            bone.use_connect = True
-                            bone.use_inherit_rotation = True
-                            bone.use_inherit_scale = True
-                        except: 
-                            bone.head = Hierarchy.pivots[pivot.parentID].pos
-                            bone.use_connect = False
-						
-                        pivot_rot = Quaternion((pivot.rotation.val4,pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3))
-                        pivot_pos = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))
-                        bone.tail = bone.head + pivot_rot*pivot_pos 
-			     
+                        parent_pivot =  Hierarchy.pivots[pivot.parentID]
+                        parent_rot = Quaternion((parent_pivot.rotation.val4, parent_pivot.rotation.val1, parent_pivot.rotation.val2, parent_pivot.rotation.val3))
+                        parent = amt.edit_bones[parent_pivot.pivotName]
+                        bone.parent = parent
+                        bone.head = pivot_pos
+                        #bone.head = parent.tail
+                        bone.use_connect = True
+                        #bone.use_inherit_rotation = True
+                        #bone.use_inherit_scale = True
+                        bone.tail = bone.head + (pivot_rot)*pivot_pos
+			    
 				#create vertex group for each bone/ pivot
                 for pivot in Hierarchy.pivots:
                     mesh_ob.vertex_groups.new(pivot.pivotName)
@@ -693,6 +693,11 @@ def MainImport(givenfilepath, self, context):
                         mesh_ob.vertex_groups[boneID].add(vertIDs, weight, 'REPLACE')
                         boneID = m.vertInfs[i]
                         vertIDs = []	
+						
+                mod = mesh_ob.modifiers.new(amtName, 'ARMATURE')
+                mod.object = rig
+                mod.use_bone_envelopes = False
+                mod.use_vertex_groups = True
             else:
                 context.report({'ERROR'}, "unsupported meshtype attribute: %i" %type)
         bpy.context.scene.objects.link(mesh_ob) # Link the object to the active scene
