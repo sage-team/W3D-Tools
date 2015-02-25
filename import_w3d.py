@@ -630,8 +630,8 @@ def MainImport(givenfilepath, self, context):
                 for pivot in Hierarchy.pivots:
                     if m.header.meshName == pivot.pivotName:
                         location = pivot.pos
-                        rotation_quaternion = (pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3, pivot.rotation.val4)
-                        mesh_ob.rotation_mode = 'ZYX'
+                        rotation_quaternion = (pivot.rotation.val4, pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3)
+                        mesh_ob.rotation_mode = 'QUATERNION'
                         mesh_ob.location = location
                         mesh_ob.rotation_euler = pivot.eulerAngles
                         mesh_ob.rotation_quaternion = rotation_quaternion
@@ -643,7 +643,8 @@ def MainImport(givenfilepath, self, context):
                 amt.show_names = True
                 rig = bpy.data.objects.new(amtName, amt)
                 rig.location = Hierarchy.header.centerPos
-                rig.rotation_mode = 'XYZ'
+                #rig.rotation_mode = 'ZYX'
+                rig.rotation_mode = 'QUATERNION'
                 rig.show_x_ray = True
                 bpy.context.scene.objects.link(rig) # Link the object to the active scene
                 bpy.context.scene.objects.active = rig
@@ -653,18 +654,19 @@ def MainImport(givenfilepath, self, context):
                 for pivot in Hierarchy.pivots:
                     root = Vector((0.0, 0.0, 0.0))
                     pivot_pos = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))
-                    #pivot_rot = Quaternion((pivot.rotation.val3,pivot.rotation.val2, pivot.rotation.val1, pivot.rotation.val4))					
+                    pivot_rot = Quaternion((pivot.rotation.val4,pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3))					
                     if pivot.parentID == -1:
                         #roottransform is the position of the armature
                         bpy.data.objects[amtName].location = pivot_pos
+                        bpy.data.objects[amtName].rotation_quaternion = pivot_rot
                     elif pivot.parentID == 0:		
                         bone = amt.edit_bones.new(pivot.pivotName)
-                        bone.head = pivot_pos - Vector((-0.001, 0.0, 0.0))
-                        bone.tail = pivot_pos
+                        bone.head = root - Vector((0.001, 0.0, 0.0))
+                        bone.tail = root
                     else:	 
                         bone = amt.edit_bones.new(pivot.pivotName)
-                        #if bone.vector.y >= 0:
-                            #bone.roll = -bone.roll	
+                        if bone.vector.y >= 0:
+                            bone.roll = -bone.roll	
                         parent_pivot =  Hierarchy.pivots[pivot.parentID]
                         parent = amt.edit_bones[parent_pivot.pivotName]
                         bone.parent = parent
@@ -672,50 +674,30 @@ def MainImport(givenfilepath, self, context):
                         bone.tail = pivot_pos
                   
                 #pose armature    scale*rotation*translation
-                bpy.ops.object.mode_set(mode = 'POSE')
+                bpy.ops.object.mode_set(mode = 'OBJECT')
                 for pivot in Hierarchy.pivots:
                     pivot_pos = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))
-                    pivot_rot = Quaternion((pivot.rotation.val1,pivot.rotation.val2, pivot.rotation.val3, pivot.rotation.val4))	
+                    pivot_rot = Quaternion((pivot.rotation.val4, pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3))	
                     if pivot.parentID == -1:
                         continue
+                        rig.rotation_mode = 'QUATERNION'
+                        rig.rotation_quaternion = pivot_rot
                     elif pivot.parentID == 0:
                         bone = rig.pose.bones[pivot.pivotName]
-                        #bone.rotation_mode = 'QUATERNION'
-                        #bone.rotation_quaternion.rotate(pivot_rot)
-                        #bone.rotation_euler = pivot.eulerAngles 
-                        #mat_scale = Matrix.Scale(bone.scale)
-                        #mat_rot = QuatToMatrix(pivot_rot)
-                        #mat_trans = Matrix.Translation(pivot_pos)
-                        
-                        #bone.matrix_basis = mat_rot * mat_trans
-                        #bone.rotation_quaternion = pivot_rot
+                        bone.location = pivot_pos
+                        bone.rotation_mode = 'QUATERNION'
+                        bone.rotation_quaternion = pivot_rot
+                    elif Hierarchy.pivots[pivot.parentID].parentID == 0:
+                        bone = rig.pose.bones[pivot.pivotName]
+                        bone.rotation_mode = 'QUATERNION'
+                        bone.rotation_quaternion = pivot_rot
                     else:
                         bone = rig.pose.bones[pivot.pivotName]
-                        #bone.rotation_mode = 'QUATERNION'
-                        parent_pivot =  Hierarchy.pivots[pivot.parentID].pivotName
-                        parent = rig.pose.bones[parent_pivot]
-                        bone.location = Vector((0.0, 3.0, 0))
-                        #bone.rotation_quaternion.rotate(pivot_rot)
-                        #pbone.rotation_euler.rotate_axis(axis, math.radians(angle))
-                        #mat_rot = QuatToMatrix(pivot_rot)
-                        #mat_trans = Matrix.Translation(pivot_pos)
-                        #bone.location = bone.parent.tail 
-                        #bone.matrix_basis = mat_rot * mat_trans
-                        #bone.rotation_euler = pivot.eulerAngles
-                        #bone.rotation_quaternion = pivot_rot
-                        #print(bone.location)						
-                        #bone.tail = bone.head + pivot_rot*pivot_pos
-                        #bone.rotation_quaternion = pivot_rot
-				
-				#deform mesh
-                #for v in bm.verts:
-                    #pivot = Hierarchy.pivots[m.vertInfs[v.index]]
-                    #pivot_pos = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))
-                    #pivot_rot = Quaternion((pivot.rotation.val4,pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3))	
-                    #bone = amt.edit_bones[pivot.pivotName]
-                    #v.co = bone.matrix * v.co
-               # bm.normal_update()
-                #bm.to_mesh(mesh)
+                        bone.rotation_mode = 'QUATERNION'
+                        parent_pivot =  Hierarchy.pivots[pivot.parentID]
+                        parent_pos = Vector((parent_pivot.pos[0], parent_pivot.pos[1], parent_pivot.pos[2]))
+                        bone.location = parent_pos
+                        bone.rotation_quaternion = pivot_rot
 				
                 mesh_ob = bpy.data.objects.new(m.header.meshName, mesh)
 				
