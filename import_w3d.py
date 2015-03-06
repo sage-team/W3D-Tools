@@ -548,7 +548,7 @@ def MainImport(givenfilepath, self, context):
 
     file.close()
 
-	
+
 	##load skl file if needed -> print error message to user
     if HLod.header.modelName != HLod.header.HTreeName:
         Hierarchy = LoadSKL(givenfilepath, HLod.header.HTreeName)
@@ -564,7 +564,7 @@ def MainImport(givenfilepath, self, context):
         mesh = bpy.data.meshes.new(m.header.containerName)
         mesh.from_pydata(Vertices,[],Faces)
         mesh.uv_textures.new("UVW")
-    
+
         bm = bmesh.new()
         bm.from_mesh(mesh)
 
@@ -617,16 +617,16 @@ def MainImport(givenfilepath, self, context):
 
             mTex.texture_coords = 'UV'
             mTex.mapping = 'FLAT'
-			
+
         mesh_ob = bpy.data.objects.new(m.header.meshName, mesh)
-       
-        #hierarchy stuff 
-        if Hierarchy.header.pivotCount > 0:  
-            # mesh header attributes		
+
+        #hierarchy stuff
+        if Hierarchy.header.pivotCount > 0:
+            # mesh header attributes
             #        0      -> normal mesh
 			#        8192   -> normal mesh - two sided
-            #        32768  -> normal mesh - cast shadow		
-            #        131072 -> skin			
+            #        32768  -> normal mesh - cast shadow
+            #        131072 -> skin
 			#        163840 -> skin - cast shadow
             type = m.header.attrs
             if type == 0 or type == 8192 or type == 32768:
@@ -638,7 +638,7 @@ def MainImport(givenfilepath, self, context):
                         mesh_ob.location = location
                         mesh_ob.rotation_euler = pivot.eulerAngles
                         mesh_ob.rotation_quaternion = rotation_quaternion
-			
+
             elif type == 131072 or type == 163840:
                 amtName = HLod.header.HTreeName
                 amt = bpy.data.armatures.new(Hierarchy.header.hierName)
@@ -650,33 +650,33 @@ def MainImport(givenfilepath, self, context):
                 bpy.context.scene.objects.link(rig) # Link the object to the active scene
                 bpy.context.scene.objects.active = rig
                 bpy.ops.object.mode_set(mode = 'EDIT')
-                bpy.context.scene.update()	
-			
+                bpy.context.scene.update()
+
                 for pivot in Hierarchy.pivots:
                     root = Vector((0.0, 0.0, 0.0))
                     pivot_pos = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))
-                    pivot_rot = Quaternion((pivot.rotation.val4,pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3))					
+                    pivot_rot = Quaternion((pivot.rotation.val4,pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3))
                     if pivot.parentID == -1:
                         #roottransform is the position of the armature
                         bpy.data.objects[amtName].location = pivot_pos
-                    elif pivot.parentID == 0:						
+                    elif pivot.parentID == 0:
                         bone = amt.edit_bones.new(pivot.pivotName)
                         bone.head = root - Vector((0.01, 0.0, 0.0))
-                        bone.tail = root 
-                    else:	 
+                        bone.tail = root
+                    else:
                         bone = amt.edit_bones.new(pivot.pivotName)
                         parent_pivot =  Hierarchy.pivots[pivot.parentID]
                         parent = amt.edit_bones[parent_pivot.pivotName]
                         bone.parent = parent
                         bone.head = root - pivot_pos
                         bone.tail = root
-                  
+
                 #pose armature
-                #switch x and y and set x to -x why?				
+                #switch x and y and set x to -x why?
                 bpy.ops.object.mode_set(mode = 'OBJECT')
                 for pivot in Hierarchy.pivots:
                     pivot_pos = Vector((-pivot.pos[1], pivot.pos[0], pivot.pos[2]))
-                    pivot_rot = Quaternion((pivot.rotation.val4, -pivot.rotation.val2, pivot.rotation.val1, pivot.rotation.val3))	
+                    pivot_rot = Quaternion((pivot.rotation.val4, -pivot.rotation.val2, pivot.rotation.val1, pivot.rotation.val3))
                     if pivot.parentID == -1:
                         continue
                     elif pivot.parentID == 0:
@@ -697,13 +697,13 @@ def MainImport(givenfilepath, self, context):
                         bone.rotation_euler = pivot.eulerAngles
                         bone.rotation_quaternion = pivot_rot
                         bone.location = pivot_pos
-				
+
                 bpy.ops.object.mode_set(mode = 'OBJECT')
-                
+
 				#create vertex group for each bone/ pivot
                 for pivot in Hierarchy.pivots:
                     mesh_ob.vertex_groups.new(pivot.pivotName)
-				 
+
                 vertIDs = []
                 weight = 1.0 #in range 0.0 to 1.0
                 boneID = m.vertInfs[0]
@@ -713,9 +713,9 @@ def MainImport(givenfilepath, self, context):
                     else:
                         mesh_ob.vertex_groups[boneID].add(vertIDs, weight, 'REPLACE')
                         boneID = m.vertInfs[i]
-                        vertIDs = []	
+                        vertIDs = []
                         vertIDs.append(i)
-						
+
                 mod = mesh_ob.modifiers.new(amtName, 'ARMATURE')
                 mod.object = rig
                 mod.use_bone_envelopes = False
@@ -733,29 +733,4 @@ def MainImport(givenfilepath, self, context):
                     #for space in area.spaces:
                         #if space.type == 'VIEW_3D':
                             #space.viewport_shade = 'TEXTURED'
-							
-class W3DImporter(bpy.types.Operator):
-    '''Import from W3D File Format (.w3d)'''
-    bl_idname = "import_mesh.westerwood_w3d"
-    bl_label = 'Import W3D'
 
-    # List of operator properties, the attributes will be assigned
-    # to the class instance from the operator settings before calling.
-    filepath = StringProperty(
-                name="File Path",\
-                description="Filepath used for importing the W3D file",\
-                maxlen=1024,\
-                default="")
-
-    def execute(self, context):
-        t = time.mktime(datetime.datetime.now().timetuple())
-        with open(self.properties.filepath, 'rb') as file:
-            print('Importing file', self.properties.filepath)
-            read(file, context, self)
-
-        t = time.mktime(datetime.datetime.now().timetuple()) - t
-        print('Finished importing in', t, 'seconds')
-        return {'FINISHED!'}
-
-    def invoke(self, context, event):
-        return {'RUNNING_MODAL'}
