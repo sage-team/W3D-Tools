@@ -499,6 +499,63 @@ def LoadSKL(givenfilepath, filename):
         Chunknumber += 1
     file.close()
     return Hierarchy
+	
+def createArmature(Hierarchy, amtName, non_bone_pivots):
+    amt = bpy.data.armatures.new(Hierarchy.header.hierName)
+    amt.show_names = True
+    rig = bpy.data.objects.new(amtName, amt)
+    rig.location = Hierarchy.header.centerPos
+    rig.rotation_mode = 'QUATERNION'
+    rig.show_x_ray = True
+    bpy.context.scene.objects.link(rig) # Link the object to the active scene
+    bpy.context.scene.objects.active = rig
+    bpy.ops.object.mode_set(mode = 'EDIT')
+    bpy.context.scene.update()	
+			
+    for pivot in Hierarchy.pivots:
+        root = Vector((0.0, 0.0, 0.0))
+        pivot_pos = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))				
+        if pivot.parentID == -1:
+            #roottransform is the position of the armature
+            #bpy.data.objects[amtName].location = pivot_pos
+            print("")
+        elif pivot.parentID == 0:						
+            bone = amt.edit_bones.new(pivot.pivotName)
+            bone.head = root - Vector((0.01, 0.0, 0.0))
+            bone.tail = root 
+        else:	 
+            bone = amt.edit_bones.new(pivot.pivotName)
+            parent_pivot =  Hierarchy.pivots[pivot.parentID]
+            parent = amt.edit_bones[parent_pivot.pivotName]
+            bone.parent = parent
+            bone.head = root - pivot_pos
+            bone.tail = root
+                  
+    #pose armature
+    #switch x and y and set x to -x why?				
+    bpy.ops.object.mode_set(mode = 'OBJECT')
+    for pivot in Hierarchy.pivots:
+        pivot_pos = Vector((-pivot.pos[1], pivot.pos[0], pivot.pos[2]))
+        #pivot_rot = Quaternion((pivot.rotation.val4, -pivot.rotation.val2, pivot.rotation.val1, pivot.rotation.val3))	
+        pivot_rot = Quaternion((pivot.rotation.val4, -pivot.rotation.val2, pivot.rotation.val1, pivot.rotation.val3))	
+        if pivot.parentID == -1:
+            continue
+        elif pivot.parentID == 0:
+            bone = rig.pose.bones[pivot.pivotName]
+            bone.rotation_mode = 'QUATERNION'
+            bone.rotation_euler = pivot.eulerAngles
+            bone.rotation_quaternion = pivot_rot
+            bone.location = pivot_pos
+        else:
+            bone = rig.pose.bones[pivot.pivotName]
+            bone.rotation_mode = 'QUATERNION'
+            bone.rotation_euler = pivot.eulerAngles
+            bone.rotation_quaternion = pivot_rot
+            bone.location = pivot_pos
+				
+    bpy.ops.object.mode_set(mode = 'OBJECT')
+	
+    return rig
 
     #reads the file and get chunks and do all the other stuff
 def MainImport(givenfilepath, self, context):
@@ -510,6 +567,7 @@ def MainImport(givenfilepath, self, context):
     Meshes = []
     Hierarchy = struct_w3d.Hiera()
     HLod = struct_w3d.HLod()
+    non_bone_pivots = []
 
     while file.tell() < filesize:
         data = ReadLong(file)
@@ -548,6 +606,21 @@ def MainImport(givenfilepath, self, context):
 
     file.close()
 
+	##load skeleton (_skl.w3d) file if needed 
+    if HLod.header.modelName != HLod.header.HTreeName:
+        try:
+            Hierarchy = LoadSKL(givenfilepath, HLod.header.HTreeName)
+        except:
+            context.report({'ERROR'}, "skeleton file not found: " + HLod.header.HTreeName) 
+
+    #set up non_bone_pivots
+    for obj in HLod.lodArray.subObjects:
+        non_bone_pivots.append(obj.boneIndex)
+		
+	#create skeleton if needed
+    if Hierarchy.header.hierName.endswith('_SKL'):
+        amtName = Hierarchy.header.hierName
+        rig = createArmature(Hierarchy, amtName, non_bone_pivots)
 
 	##load skl file if needed -> print error message to user
     if HLod.header.modelName != HLod.header.HTreeName:
@@ -604,6 +677,7 @@ def MainImport(givenfilepath, self, context):
                     print(ddspath)
                     found_img = True
                 except:
+                    context.report({'ERROR'}, "texture file not found: " + basename) 
                     print("Cannot load image %s" % os.path.dirname(givenfilepath)+"/"+basename)
 
             # Create material
@@ -699,7 +773,7 @@ def MainImport(givenfilepath, self, context):
                         bone.location = pivot_pos
 
                 bpy.ops.object.mode_set(mode = 'OBJECT')
-
+				
 				#create vertex group for each bone/ pivot
                 for pivot in Hierarchy.pivots:
                     mesh_ob.vertex_groups.new(pivot.pivotName)
@@ -715,7 +789,8 @@ def MainImport(givenfilepath, self, context):
                         boneID = m.vertInfs[i]
                         vertIDs = []
                         vertIDs.append(i)
-
+                mesh_ob.vertex_groups[boneID].add(vertIDs, weight, 'REPLACE')
+						
                 mod = mesh_ob.modifiers.new(amtName, 'ARMATURE')
                 mod.object = rig
                 mod.use_bone_envelopes = False
