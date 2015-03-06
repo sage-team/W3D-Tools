@@ -622,6 +622,10 @@ def MainImport(givenfilepath, self, context):
         amtName = Hierarchy.header.hierName
         rig = createArmature(Hierarchy, amtName, non_bone_pivots)
 
+	##load skl file if needed -> print error message to user
+    if HLod.header.modelName != HLod.header.HTreeName:
+        Hierarchy = LoadSKL(givenfilepath, HLod.header.HTreeName)
+
     for m in Meshes:
         Vertices = m.verts
         Faces = []
@@ -710,6 +714,66 @@ def MainImport(givenfilepath, self, context):
                         mesh_ob.rotation_quaternion = rotation_quaternion
 
             elif type == 131072 or type == 163840:
+                amtName = HLod.header.HTreeName
+                amt = bpy.data.armatures.new(Hierarchy.header.hierName)
+                amt.show_names = True
+                rig = bpy.data.objects.new(amtName, amt)
+                rig.location = Hierarchy.header.centerPos
+                rig.rotation_mode = 'QUATERNION'
+                rig.show_x_ray = True
+                bpy.context.scene.objects.link(rig) # Link the object to the active scene
+                bpy.context.scene.objects.active = rig
+                bpy.ops.object.mode_set(mode = 'EDIT')
+                bpy.context.scene.update()
+
+                for pivot in Hierarchy.pivots:
+                    root = Vector((0.0, 0.0, 0.0))
+                    pivot_pos = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))
+                    pivot_rot = Quaternion((pivot.rotation.val4,pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3))
+                    if pivot.parentID == -1:
+                        #roottransform is the position of the armature
+                        bpy.data.objects[amtName].location = pivot_pos
+                    elif pivot.parentID == 0:
+                        bone = amt.edit_bones.new(pivot.pivotName)
+                        bone.head = root - Vector((0.01, 0.0, 0.0))
+                        bone.tail = root
+                    else:
+                        bone = amt.edit_bones.new(pivot.pivotName)
+                        parent_pivot =  Hierarchy.pivots[pivot.parentID]
+                        parent = amt.edit_bones[parent_pivot.pivotName]
+                        bone.parent = parent
+                        bone.head = root - pivot_pos
+                        bone.tail = root
+
+                #pose armature
+                #switch x and y and set x to -x why?
+                bpy.ops.object.mode_set(mode = 'OBJECT')
+                for pivot in Hierarchy.pivots:
+                    pivot_pos = Vector((-pivot.pos[1], pivot.pos[0], pivot.pos[2]))
+                    pivot_rot = Quaternion((pivot.rotation.val4, -pivot.rotation.val2, pivot.rotation.val1, pivot.rotation.val3))
+                    if pivot.parentID == -1:
+                        continue
+                    elif pivot.parentID == 0:
+                        bone = rig.pose.bones[pivot.pivotName]
+                        bone.rotation_mode = 'QUATERNION'
+                        bone.rotation_euler = pivot.eulerAngles
+                        bone.rotation_quaternion = pivot_rot
+                        bone.location = pivot_pos
+                    elif Hierarchy.pivots[pivot.parentID].parentID == 0:
+                        bone = rig.pose.bones[pivot.pivotName]
+                        bone.rotation_mode = 'QUATERNION'
+                        bone.rotation_euler = pivot.eulerAngles
+                        bone.rotation_quaternion = pivot_rot
+                        bone.location = pivot_pos
+                    else:
+                        bone = rig.pose.bones[pivot.pivotName]
+                        bone.rotation_mode = 'QUATERNION'
+                        bone.rotation_euler = pivot.eulerAngles
+                        bone.rotation_quaternion = pivot_rot
+                        bone.location = pivot_pos
+
+                bpy.ops.object.mode_set(mode = 'OBJECT')
+				
 				#create vertex group for each bone/ pivot
                 for pivot in Hierarchy.pivots:
                     mesh_ob.vertex_groups.new(pivot.pivotName)
