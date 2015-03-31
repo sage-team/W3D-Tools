@@ -1,4 +1,5 @@
 #Struct
+from mathutils import Vector, Quaternion
 
 class Struct:
     def __init__ (self, *argv, **argd):
@@ -17,29 +18,32 @@ class RGBA(Struct):
     b = 0
     a = 0
 
-class Quat(Struct):
-    val1 = 0.0
-    val2 = 0.0
-    val3 = 0.0
-    val4 = 0.0
-
 class HieraHeader(Struct):
     version = 0
     hierName = ""
     pivotCount = 0
-    centerPos = (0.0, 0.0 ,0.0)
+    centerPos = Vector((0.0, 0.0 ,0.0))
 
 class HieraPivot(Struct):
-    pivotName = ""
+    name = ""
     parentID = 0
-    pos = (0, 0 ,0)
-    eulerAngles =(0, 0 ,0)
-    rotation = Quat(val1 = 0.0,val2 = 0.0,val3 = 0.0,val4 = 0.0)
+    position = Vector((0.0, 0.0 ,0.0))
+    eulerAngles = Vector((0.0, 0.0 ,0.0))
+    rotation = Quaternion((0.0, 0.0, 0.0, 0.0))
+    isbone = 1 
 
 class Hiera(Struct):
     header = HieraHeader()
     pivots = HieraPivot()
     pivot_fixups = []
+
+class AABox(Struct): 
+    version = 0
+    attributes = 0
+    name = ""
+    color = RGBA()
+    center = Vector((0.0, 0.0 ,0.0))
+    extend = Vector((0.0, 0.0 ,0.0))
 	
 class HLodHeader(Struct):
     version = 0
@@ -80,9 +84,9 @@ class MshMatSetInfo(Struct):
     TextureCount = 0
 
 class MshFace(Struct):
-    vertIds = (0, 0 ,0)
+    vertIds = Vector((0.0, 0.0 ,0.0))
     attrs = 0
-    normal = (0, 0 ,0)
+    normal = Vector((0.0, 0.0 ,0.0))
     distance = 0.0
 
 class MshTexStage(Struct):
@@ -103,6 +107,21 @@ class MshMat(Struct):
 class MshTex(Struct):
     txfilename = ""
     txinfo = ""
+	
+class AABTreeHeader(Struct):
+    nodeCount = 0
+    polyCount = 0
+	
+class AABTreeNode(Struct):
+    min = Vector((0.0, 0.0 ,0.0))
+    max = Vector((0.0, 0.0 ,0.0))
+    FrontOrPoly0 = 0
+    BackOrPolyCount = 0
+
+class MshAABTree(Struct):
+    header = AABTreeHeader()
+    polyIndices = []
+    nodes = []
 
 class MshHeader(Struct):
     version = 0
@@ -118,9 +137,9 @@ class MshHeader(Struct):
     futureCount = 0
     vertChannelCount = 0
     faceChannelCount = 0
-    minCorner = (0, 0 ,0)
-    maxCorner = (0, 0 ,0)
-    sphCenter = (0, 0 ,0)
+    minCorner = Vector((0.0, 0.0 ,0.0))
+    maxCorner = Vector((0.0, 0.0 ,0.0))
+    sphCenter = Vector((0.0, 0.0 ,0.0))
     sphRadius = 0.0
     userText  = ""
 
@@ -147,3 +166,4 @@ class Msh(Struct):
     vertMatls = []
     textures = []
     matlPass = MshMatPass()
+    aabtree = MshAABTree()

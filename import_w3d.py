@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 3.3.2015
+#Last Modification 26.3.2015
 #Loads the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -9,7 +9,7 @@ import math
 import sys
 import bmesh
 from bpy.props import *
-from mathutils import Vector, Matrix, Quaternion
+from mathutils import Vector, Quaternion
 from . import struct_w3d
 
 def ReadString(file):
@@ -18,13 +18,16 @@ def ReadString(file):
     while ord(b)!=0:
         bytes.append(b)
         b = file.read(1)
-
     return (b"".join(bytes)).decode("utf-8")
 
 def ReadFixedString(file):
     SplitString = ((str(file.read(16)))[2:16]).split("\\")
     return SplitString[0]
 
+def ReadFixedString32(file):
+    SplitString = ((str(file.read(32)))[2:32]).split("\\")
+    return SplitString[0]
+	
 def ReadRGBA(file):
     return struct_w3d.RGBA(r=file.read(1),g=file.read(1),b=file.read(1),a=file.read(1))
 
@@ -58,27 +61,27 @@ def ReadHierarchyHeader(file):
     HieraHeader.version = ReadLong(file)
     HieraHeader.hierName = ReadFixedString(file)
     HieraHeader.pivotCount = ReadLong(file)
-    HieraHeader.centerPos = (ReadFloat(file), ReadFloat(file), ReadFloat(file))
-
+    HieraHeader.centerPos = Vector((ReadFloat(file), ReadFloat(file), ReadFloat(file)))
     return HieraHeader
 
 def ReadPivots(file, chunkEnd):
     pivots = []
     while file.tell() < chunkEnd:
         pivot = struct_w3d.HieraPivot()
-        pivot.pivotName = ReadFixedString(file)
+        pivot.name = ReadFixedString(file)
         pivot.parentID = ReadSignedLong(file)
-        pivot.pos = (ReadFloat(file), ReadFloat(file) ,ReadFloat(file))
-        pivot.eulerAngles = (ReadFloat(file), ReadFloat(file), ReadFloat(file))
-        pivot.rotation = struct_w3d.Quat(val1 = ReadFloat(file), val2 = ReadFloat(file),val3 = ReadFloat(file),val4 = ReadFloat(file))
-
+        pivot.position = Vector((ReadFloat(file), ReadFloat(file) ,ReadFloat(file)))
+        pivot.eulerAngles = Vector((ReadFloat(file), ReadFloat(file), ReadFloat(file)))
+        quat = (ReadFloat(file), ReadFloat(file), ReadFloat(file), ReadFloat(file))
+        #change order from xyzw to wxyz
+        pivot.rotation = Quaternion((quat[3], quat[0], quat[1], quat[2]))
         pivots.append(pivot)
     return pivots
 
 def ReadPivotFixups(file, chunkEnd):
     pivot_fixups = []
     while file.tell() < chunkEnd:
-        pivot_fixup = (ReadFloat(file), ReadFloat(file), ReadFloat(file))
+        pivot_fixup = Vector((ReadFloat(file), ReadFloat(file), ReadFloat(file)))
         pivot_fixups.append(pivot_fixup)
     return pivot_fixups
 
@@ -86,12 +89,10 @@ def ReadHierarchy(file,chunkEnd):
     HieraHeader = struct_w3d.HieraHeader()
     Pivots = []
     Pivot_fixups = []
-
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
-
         if chunkType == 257:
             HieraHeader = ReadHierarchyHeader(file)
         elif chunkType == 258:
@@ -99,13 +100,17 @@ def ReadHierarchy(file,chunkEnd):
         elif chunkType == 259:
             Pivot_fixups = ReadPivotFixups(file, subChunkEnd)
         else:
-            file.seek(chunkSize, 1)
-
+            file.seek(chunkSize, 1)	
     return struct_w3d.Hiera(header = HieraHeader, pivots = Pivots, pivot_fixups = Pivot_fixups)
 
 def ReadAABox(file,chunkEnd):
-    while file.tell() < chunkEnd:
-        file.read(4)
+    version = ReadLong(file)
+    attributes = ReadLong(file)
+    name = ReadFixedString32(file)
+    color = ReadRGBA(file)
+    center = Vector((ReadFloat(file), ReadFloat(file), ReadFloat(file)))
+    extend = Vector((ReadFloat(file), ReadFloat(file), ReadFloat(file)))
+    return struct_w3d.AABox(version = version, attributes = attributes, name = name, color = color, center = center, extend = extend)
 
 def ReadCompressed_Animation(file,chunkEnd):
     while file.tell() < chunkEnd:
@@ -125,12 +130,14 @@ def ReadHLodArrayHeader(file):
     HLodArrayHeader.maxScreenSize = ReadFloat(file)
     return HLodArrayHeader
 
-def ReadHLodSubObject(file):
+def ReadHLodSubObject(file, chunkEnd):
     HLodSubObject = struct_w3d.HLodSubObject()
-    HLodSubObject.name = ReadFixedString(file)
     HLodSubObject.boneIndex = ReadLong(file)
+    HLodSubObject.name = ReadFixedString32(file)
+    #because of unknown length of the string (evtl read fixed string with 32??)
+    #while file.tell() < chunkEnd:
+        #file.read(1)
     return HLodSubObject
-
 
 def ReadHLodArray(file, chunkEnd):
     HLodArrayHeader = struct_w3d.HLodArrayHeader()
@@ -139,15 +146,13 @@ def ReadHLodArray(file, chunkEnd):
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
-
         if chunkType == 1795:
             HLodArrayHeader = ReadHLodArrayHeader(file)
         elif chunkType == 1796:
-            HLodSubObjects.append(ReadHLodSubObject(file))
+            HLodSubObjects.append(ReadHLodSubObject(file, subChunkEnd))
         else:
-            file.seek(chunkSize, 1)
+            file.seek(chunkSize, 1)	
     return struct_w3d.HLodArray(header = HLodArrayHeader, subObjects = HLodSubObjects)
-
 
 def ReadHLod(file,chunkEnd):
     HLodHeader = struct_w3d.HLodHeader()
@@ -156,14 +161,12 @@ def ReadHLod(file,chunkEnd):
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
-
         if chunkType == 1793:
             HLodHeader = ReadHLodHeader(file)
         elif chunkType == 1794:
             HLodArray = ReadHLodArray(file, subChunkEnd)
         else:
             file.seek(chunkSize, 1)
-
     return struct_w3d.HLod(header = HLodHeader, lodArray = HLodArray)
 
 def ReadAnimation(file,chunkEnd):
@@ -189,7 +192,6 @@ def ReadMeshTextureStage(file,chunkEnd):
             TextureCoords = ReadMeshTextureCoordArray(file,subChunkEnd)
         else:
             file.seek(chunkSize,1)
-
     return struct_w3d.MshTexStage(txIds = TextureIds,txCoords = TextureCoords)
 
 def ReadMeshMaterialPass(file, chunkEnd):
@@ -200,7 +202,6 @@ def ReadMeshMaterialPass(file, chunkEnd):
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
-
         if chunkType == 57: #Vertex Material Ids
             VertexMaterialIds = ReadLongArray(file,subChunkEnd)
         elif chunkType == 58:#Shader Ids
@@ -211,18 +212,14 @@ def ReadMeshMaterialPass(file, chunkEnd):
             TextureStage.txCoords = ReadMeshTextureCoordArray(file,subChunkEnd)
         else:
             file.seek(chunkSize,1)
-
     return struct_w3d.MshMatPass(vmIds = VertexMaterialIds,shaderIds = ShaderIds,txStage = TextureStage)
-
 
 def ReadW3DMaterial(file,chunkEnd):
     mat = struct_w3d.MshMat()
     while file.tell() < chunkEnd:
-        #file.read(4)
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell()+chunkSize
-
         if chunkType == 44:
             mat.vmName = ReadString(file)
         elif chunkType == 45:
@@ -242,28 +239,26 @@ def ReadW3DMaterial(file,chunkEnd):
             mat.vmArgs1 = ReadString(file)
         else:
             file.seek(chunkSize,1)
-
     return mat
 
 def ReadMeshMaterialArray(file,chunkEnd):
     Mats = []
     while file.tell() < chunkEnd:
-        #file.read(4)
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell()+chunkSize
         if chunkType == 43:
             Mats.append(ReadW3DMaterial(file,subChunkEnd))
         else:
-            file.seek(chunkSize,1)
+            file.seek(chunkSize,1)	
     return Mats
 
 def ReadMeshVertInfs(file, chunkEnd):
-        boneIds = []
-        while file.tell()  < chunkEnd:
-            boneIds.append(ReadShort(file))
-            file.seek(6,1)
-        return boneIds
+    boneIds = []
+    while file.tell()  < chunkEnd:
+        boneIds.append(ReadShort(file))
+        file.seek(6,1)
+    return boneIds
 
 def ReadMeshVertArray(file, chunkEnd):
     verts = []
@@ -284,7 +279,7 @@ def ReadMeshShaderArray(file, chunkEnd):
 def ReadMeshFace(file):
     result = struct_w3d.MshFace(vertIds = (ReadLong(file), ReadLong(file), ReadLong(file)),
     attrs = ReadLong(file),
-    normal = (ReadFloat(file),ReadFloat(file), ReadFloat(file)),
+    normal = Vector((ReadFloat(file),ReadFloat(file), ReadFloat(file))),
     distance = ReadFloat(file))
     return result
 
@@ -298,12 +293,11 @@ def ReadTexture(file,chunkEnd):
         Chunktype = ReadLong(file)
         Chunksize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + Chunksize
-
         if Chunktype == 50:
             tex.name = ReadString(file)
         elif Chunktype == 51:
-            tex.textureInfo = struct_w3d.W3DTextureInfo(attributes=ReadShort(file),
-                animType=ReadShort(file),frameCount=ReadLong(file),frameRate=ReadFloat(file))
+            tex.textureInfo = struct_w3d.W3DTextureInfo(attributes = ReadShort(file),
+                animType = ReadShort(file), frameCount = ReadLong(file), frameRate = ReadFloat(file))
         else:
             file.seek(Chunksize,1)
     return tex
@@ -314,13 +308,52 @@ def ReadTextureArray(file,chunkEnd):
         Chunktype = ReadLong(file)
         Chunksize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + Chunksize
-
         if Chunktype == 49:
             textures.append(ReadTexture(file,subChunkEnd))
         else:
             file.seek(Chunksize,1)
-
     return textures
+	
+def ReadAABTreeHeader(file, chunkEnd):
+    nodeCount = ReadLong(file)
+    polyCount = ReadLong(file)
+    #padding of the header
+    while file.tell() < chunkEnd:
+        file.read(4)
+    return struct_w3d.AABTreeHeader(nodeCount = nodeCount, polyCount = polyCount)
+	
+def ReadAABTreePolyIndices(file, chunkEnd):
+    polyIndices = []
+    while file.tell() < chunkEnd:
+        polyIndices.append(ReadLong(file))
+    return polyIndices
+	
+def ReadAABTreeNodes(file, chunkEnd):
+    nodes = []
+    while file.tell() < chunkEnd:
+        min = Vector((ReadFloat(file), ReadFloat(file), ReadFloat(file)))
+        max = Vector((ReadFloat(file), ReadFloat(file), ReadFloat(file)))
+        FrontOrPoly0 = ReadLong(file)
+        BackOrPolyCount = ReadLong(file)
+        nodes.append(struct_w3d.AABTreeNode(min = min, max = max, FrontOrPoly0 = FrontOrPoly0, BackOrPolyCount = BackOrPolyCount))
+    return nodes
+	
+#Axis-Aligned-Bounding-Box tree
+def ReadAABTree(file, chunkEnd):
+    aabtree = struct_w3d.MshAABTree()
+    while file.tell() < chunkEnd:
+        Chunktype = ReadLong(file)
+        Chunksize = GetChunkSize(ReadLong(file))
+        subChunkEnd = file.tell() + Chunksize
+        if Chunktype == 145:
+            aabtree.header = ReadAABTreeHeader(file, subChunkEnd)
+        elif Chunktype == 146:
+            aabtree.polyIndices = ReadAABTreePolyIndices(file, subChunkEnd)
+        elif Chunktype == 147:
+            aabtree.nodes = ReadAABTreeNodes(file, subChunkEnd)
+        else:
+            file.seek(Chunksize, 1)
+    return aabtree
 
 def ReadMeshHeader(file):
     result = struct_w3d.MshHeader(version = ReadLong(file), attrs =  ReadLong(file), meshName = ReadFixedString(file),
@@ -329,13 +362,12 @@ def ReadMeshHeader(file):
     prelitVersion = ReadLong(file) ,futureCount = ReadLong(file),
     vertChannelCount = ReadLong(file), faceChannelCount = ReadLong(file),
     #bounding volumes
-    minCorner = (ReadFloat(file),ReadFloat(file),ReadFloat(file)),
-    maxCorner = (ReadFloat(file),ReadFloat(file),ReadFloat(file)),
-    sphCenter = (ReadFloat(file),ReadFloat(file),ReadFloat(file)),
+    minCorner = Vector((ReadFloat(file),ReadFloat(file),ReadFloat(file))),
+    maxCorner = Vector((ReadFloat(file),ReadFloat(file),ReadFloat(file))),
+    sphCenter = Vector((ReadFloat(file),ReadFloat(file),ReadFloat(file))),
     sphRadius =  ReadFloat(file))
     return result
 
-    # do what it says
 def ReadMesh(file,chunkEnd):
     MeshVerticesInfs = []
     MeshVertices = []
@@ -350,6 +382,8 @@ def ReadMesh(file,chunkEnd):
     MeshMats = []
     MeshTextures = []
     MeshUsertext = ""
+    MeshAABTree = struct_w3d.MshAABTree()
+	
     print("NEW MESH:")
     while file.tell() < chunkEnd:
         Chunktype = ReadLong(file)
@@ -470,12 +504,20 @@ def ReadMesh(file,chunkEnd):
                 print("Mistake while reading MeshMaterialPass (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
+        elif Chunktype == 144:
+            try:
+                MeshAABTree = ReadAABTree(file,subChunkEnd)
+                print("AABTree")
+            except:
+                print("Mistake while reading AABTree (Mesh) Byte:%s" % file.tell())
+                e = sys.exc_info()[1]
+                print(e)
         else:
-            print("Invalid Chunktype: %s" %Chunktype)
+            print("Invalid chunktype: %s" %Chunktype)
+            context.report({'ERROR'}, "Invalid chunktype: %s" %Chunktype) 
             file.seek(Chunksize,1)
-
     return struct_w3d.Msh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals,vertInfs = MeshVerticesInfs,faces = MeshFaces,userText = MeshUsertext,
-                shadeIds = MeshShadeIds, matlheader = [],shaders = [],vertMatls = MeshVerticeMats , textures = MeshTextures, matlPass = MeshMaterialPass)
+                shadeIds = MeshShadeIds, matlheader = [],shaders = [],vertMatls = MeshVerticeMats , textures = MeshTextures, matlPass = MeshMaterialPass, aabtree = MeshAABTree)
 
 def LoadSKL(givenfilepath, filename):
     Hierarchy = struct_w3d.Hiera()
@@ -500,7 +542,7 @@ def LoadSKL(givenfilepath, filename):
     file.close()
     return Hierarchy
 	
-def createArmature(Hierarchy, amtName, non_bone_pivots):
+def createArmature(Hierarchy, amtName):
     amt = bpy.data.armatures.new(Hierarchy.header.hierName)
     amt.show_names = True
     rig = bpy.data.objects.new(amtName, amt)
@@ -511,50 +553,35 @@ def createArmature(Hierarchy, amtName, non_bone_pivots):
     bpy.context.scene.objects.active = rig
     bpy.ops.object.mode_set(mode = 'EDIT')
     bpy.context.scene.update()	
-			
-    for pivot in Hierarchy.pivots:
-        root = Vector((0.0, 0.0, 0.0))
-        pivot_pos = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))				
-        if pivot.parentID == -1:
-            #roottransform is the position of the armature
-            #bpy.data.objects[amtName].location = pivot_pos
-            print("")
-        elif pivot.parentID == 0:						
-            bone = amt.edit_bones.new(pivot.pivotName)
-            bone.head = root - Vector((0.01, 0.0, 0.0))
-            bone.tail = root 
-        else:	 
-            bone = amt.edit_bones.new(pivot.pivotName)
-            parent_pivot =  Hierarchy.pivots[pivot.parentID]
-            parent = amt.edit_bones[parent_pivot.pivotName]
-            bone.parent = parent
-            bone.head = root - pivot_pos
-            bone.tail = root
-                  
-    #pose armature
-    #switch x and y and set x to -x why?				
-    bpy.ops.object.mode_set(mode = 'OBJECT')
-    for pivot in Hierarchy.pivots:
-        pivot_pos = Vector((-pivot.pos[1], pivot.pos[0], pivot.pos[2]))
-        #pivot_rot = Quaternion((pivot.rotation.val4, -pivot.rotation.val2, pivot.rotation.val1, pivot.rotation.val3))	
-        pivot_rot = Quaternion((pivot.rotation.val4, -pivot.rotation.val2, pivot.rotation.val1, pivot.rotation.val3))	
-        if pivot.parentID == -1:
+
+	#create the bones from the pivots
+    root = Vector((0.0, 0.0, 0.0))
+    for pivot in Hierarchy.pivots:			
+        if not pivot.isbone:
             continue
-        elif pivot.parentID == 0:
-            bone = rig.pose.bones[pivot.pivotName]
-            bone.rotation_mode = 'QUATERNION'
-            bone.rotation_euler = pivot.eulerAngles
-            bone.rotation_quaternion = pivot_rot
-            bone.location = pivot_pos
-        else:
-            bone = rig.pose.bones[pivot.pivotName]
-            bone.rotation_mode = 'QUATERNION'
-            bone.rotation_euler = pivot.eulerAngles
-            bone.rotation_quaternion = pivot_rot
-            bone.location = pivot_pos
-				
+        bone = amt.edit_bones.new(pivot.name)
+        if pivot.parentID > 0:						
+            parent_pivot =  Hierarchy.pivots[pivot.parentID]
+            parent = amt.edit_bones[parent_pivot.name]
+            #if parent.length < 0.02:
+            #    parent.tail = root + Vector((0, 0.2, 0))    
+            bone.parent = parent
+        bone.head = root 
+        bone.tail = root + Vector((0.0, 0.02, 0.0))
+			
+    #pose the bones
+    bpy.ops.object.mode_set(mode = 'POSE')
+    for pivot in Hierarchy.pivots:	
+        if not pivot.isbone:
+            continue
+        bone = rig.pose.bones[pivot.name]
+        bone.location = pivot.position
+        bone.rotation_mode = 'QUATERNION'
+        bone.rotation_euler = pivot.eulerAngles
+        bone.rotation_quaternion = pivot.rotation 
+        #rot90 = Quaternion((0.707, 0, 0, 0.707))
+
     bpy.ops.object.mode_set(mode = 'OBJECT')
-	
     return rig
 
     #reads the file and get chunks and do all the other stuff
@@ -567,7 +594,7 @@ def MainImport(givenfilepath, self, context):
     Meshes = []
     Hierarchy = struct_w3d.Hiera()
     HLod = struct_w3d.HLod()
-    non_bone_pivots = []
+    amtName = ""	
 
     while file.tell() < filesize:
         data = ReadLong(file)
@@ -605,26 +632,22 @@ def MainImport(givenfilepath, self, context):
         Chunknumber += 1
 
     file.close()
-
+	
 	##load skeleton (_skl.w3d) file if needed 
     if HLod.header.modelName != HLod.header.HTreeName:
         try:
             Hierarchy = LoadSKL(givenfilepath, HLod.header.HTreeName)
         except:
             context.report({'ERROR'}, "skeleton file not found: " + HLod.header.HTreeName) 
+			
+    #test for non_bone_pivots
+    for obj in HLod.lodArray.subObjects: 
+        Hierarchy.pivots[obj.boneIndex].isbone = 0
 
-    #set up non_bone_pivots
-    for obj in HLod.lodArray.subObjects:
-        non_bone_pivots.append(obj.boneIndex)
-		
-	#create skeleton if needed
+    #create skeleton if needed
     if Hierarchy.header.hierName.endswith('_SKL'):
         amtName = Hierarchy.header.hierName
-        rig = createArmature(Hierarchy, amtName, non_bone_pivots)
-
-	##load skl file if needed -> print error message to user
-    if HLod.header.modelName != HLod.header.HTreeName:
-        Hierarchy = LoadSKL(givenfilepath, HLod.header.HTreeName)
+        rig = createArmature(Hierarchy, amtName)
 
     for m in Meshes:
         Vertices = m.verts
@@ -633,7 +656,7 @@ def MainImport(givenfilepath, self, context):
         for f in m.faces:
             Faces.append(f.vertIds)
 
-        #create the mash
+        #create the mesh
         mesh = bpy.data.meshes.new(m.header.containerName)
         mesh.from_pydata(Vertices,[],Faces)
         mesh.uv_textures.new("UVW")
@@ -705,78 +728,29 @@ def MainImport(givenfilepath, self, context):
             type = m.header.attrs
             if type == 0 or type == 8192 or type == 32768:
                 for pivot in Hierarchy.pivots:
-                    if m.header.meshName == pivot.pivotName:
-                        location = pivot.pos
-                        rotation_quaternion = (pivot.rotation.val4, pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3)
+                    if m.header.meshName == pivot.name:
                         mesh_ob.rotation_mode = 'QUATERNION'
-                        mesh_ob.location = location
+                        mesh_ob.location =  pivot.position
                         mesh_ob.rotation_euler = pivot.eulerAngles
-                        mesh_ob.rotation_quaternion = rotation_quaternion
+                        mesh_ob.rotation_quaternion = pivot.rotation
+						
+                        #test if the pivot has a parent pivot and parent them if it has
+                        if pivot.parentID > 0:
+                            parent_pivot = Hierarchy.pivots[pivot.parentID]
+                            parent = bpy.data.armatures[amtName].bones[parent_pivot.name]
+							
+                            #bpy.ops.object.select_all(action='DESELECT') #deselect all object
+
+                            #parent.select = True
+                            #mesh_ob.select = True
+
+                            #bpy.context.scene.objects.active = parent 
+                            #bpy.ops.object.parent_set(type = 'BONE')
 
             elif type == 131072 or type == 163840:
-                amtName = HLod.header.HTreeName
-                amt = bpy.data.armatures.new(Hierarchy.header.hierName)
-                amt.show_names = True
-                rig = bpy.data.objects.new(amtName, amt)
-                rig.location = Hierarchy.header.centerPos
-                rig.rotation_mode = 'QUATERNION'
-                rig.show_x_ray = True
-                bpy.context.scene.objects.link(rig) # Link the object to the active scene
-                bpy.context.scene.objects.active = rig
-                bpy.ops.object.mode_set(mode = 'EDIT')
-                bpy.context.scene.update()
-
+				#create vertex group for each pivot
                 for pivot in Hierarchy.pivots:
-                    root = Vector((0.0, 0.0, 0.0))
-                    pivot_pos = Vector((pivot.pos[0], pivot.pos[1], pivot.pos[2]))
-                    pivot_rot = Quaternion((pivot.rotation.val4,pivot.rotation.val1, pivot.rotation.val2, pivot.rotation.val3))
-                    if pivot.parentID == -1:
-                        #roottransform is the position of the armature
-                        bpy.data.objects[amtName].location = pivot_pos
-                    elif pivot.parentID == 0:
-                        bone = amt.edit_bones.new(pivot.pivotName)
-                        bone.head = root - Vector((0.01, 0.0, 0.0))
-                        bone.tail = root
-                    else:
-                        bone = amt.edit_bones.new(pivot.pivotName)
-                        parent_pivot =  Hierarchy.pivots[pivot.parentID]
-                        parent = amt.edit_bones[parent_pivot.pivotName]
-                        bone.parent = parent
-                        bone.head = root - pivot_pos
-                        bone.tail = root
-
-                #pose armature
-                #switch x and y and set x to -x why?
-                bpy.ops.object.mode_set(mode = 'OBJECT')
-                for pivot in Hierarchy.pivots:
-                    pivot_pos = Vector((-pivot.pos[1], pivot.pos[0], pivot.pos[2]))
-                    pivot_rot = Quaternion((pivot.rotation.val4, -pivot.rotation.val2, pivot.rotation.val1, pivot.rotation.val3))
-                    if pivot.parentID == -1:
-                        continue
-                    elif pivot.parentID == 0:
-                        bone = rig.pose.bones[pivot.pivotName]
-                        bone.rotation_mode = 'QUATERNION'
-                        bone.rotation_euler = pivot.eulerAngles
-                        bone.rotation_quaternion = pivot_rot
-                        bone.location = pivot_pos
-                    elif Hierarchy.pivots[pivot.parentID].parentID == 0:
-                        bone = rig.pose.bones[pivot.pivotName]
-                        bone.rotation_mode = 'QUATERNION'
-                        bone.rotation_euler = pivot.eulerAngles
-                        bone.rotation_quaternion = pivot_rot
-                        bone.location = pivot_pos
-                    else:
-                        bone = rig.pose.bones[pivot.pivotName]
-                        bone.rotation_mode = 'QUATERNION'
-                        bone.rotation_euler = pivot.eulerAngles
-                        bone.rotation_quaternion = pivot_rot
-                        bone.location = pivot_pos
-
-                bpy.ops.object.mode_set(mode = 'OBJECT')
-				
-				#create vertex group for each bone/ pivot
-                for pivot in Hierarchy.pivots:
-                    mesh_ob.vertex_groups.new(pivot.pivotName)
+                    mesh_ob.vertex_groups.new(pivot.name)
 
                 vertIDs = []
                 weight = 1.0 #in range 0.0 to 1.0
