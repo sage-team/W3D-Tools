@@ -27,12 +27,16 @@ def ReadFixedString(file):
 def ReadFixedString32(file):
     SplitString = ((str(file.read(32)))[2:32]).split("\\")
     return SplitString[0]
-	
+
 def ReadRGBA(file):
     return struct_w3d.RGBA(r=file.read(1),g=file.read(1),b=file.read(1),a=file.read(1))
 
 def GetChunkSize(data):
     return (data & int(0x7FFFFFFF))
+
+def ReadByte(file):
+    #binary_format = "<l" long
+    return (struct.unpack("<L",file.read(4))[0])
 
 def ReadLong(file):
     #binary_format = "<l" long
@@ -100,7 +104,7 @@ def ReadHierarchy(file,chunkEnd):
         elif chunkType == 259:
             Pivot_fixups = ReadPivotFixups(file, subChunkEnd)
         else:
-            file.seek(chunkSize, 1)	
+            file.seek(chunkSize, 1)
     return struct_w3d.Hiera(header = HieraHeader, pivots = Pivots, pivot_fixups = Pivot_fixups)
 
 def ReadAABox(file,chunkEnd):
@@ -151,7 +155,7 @@ def ReadHLodArray(file, chunkEnd):
         elif chunkType == 1796:
             HLodSubObjects.append(ReadHLodSubObject(file, subChunkEnd))
         else:
-            file.seek(chunkSize, 1)	
+            file.seek(chunkSize, 1)
     return struct_w3d.HLodArray(header = HLodArrayHeader, subObjects = HLodSubObjects)
 
 def ReadHLod(file,chunkEnd):
@@ -250,7 +254,7 @@ def ReadMeshMaterialArray(file,chunkEnd):
         if chunkType == 43:
             Mats.append(ReadW3DMaterial(file,subChunkEnd))
         else:
-            file.seek(chunkSize,1)	
+            file.seek(chunkSize,1)
     return Mats
 
 def ReadMeshVertInfs(file, chunkEnd):
@@ -313,7 +317,7 @@ def ReadTextureArray(file,chunkEnd):
         else:
             file.seek(Chunksize,1)
     return textures
-	
+
 def ReadAABTreeHeader(file, chunkEnd):
     nodeCount = ReadLong(file)
     polyCount = ReadLong(file)
@@ -321,13 +325,13 @@ def ReadAABTreeHeader(file, chunkEnd):
     while file.tell() < chunkEnd:
         file.read(4)
     return struct_w3d.AABTreeHeader(nodeCount = nodeCount, polyCount = polyCount)
-	
+
 def ReadAABTreePolyIndices(file, chunkEnd):
     polyIndices = []
     while file.tell() < chunkEnd:
         polyIndices.append(ReadLong(file))
     return polyIndices
-	
+
 def ReadAABTreeNodes(file, chunkEnd):
     nodes = []
     while file.tell() < chunkEnd:
@@ -337,7 +341,7 @@ def ReadAABTreeNodes(file, chunkEnd):
         BackOrPolyCount = ReadLong(file)
         nodes.append(struct_w3d.AABTreeNode(min = min, max = max, FrontOrPoly0 = FrontOrPoly0, BackOrPolyCount = BackOrPolyCount))
     return nodes
-	
+
 #Axis-Aligned-Bounding-Box tree
 def ReadAABTree(file, chunkEnd):
     aabtree = struct_w3d.MshAABTree()
@@ -383,7 +387,7 @@ def ReadMesh(file,chunkEnd):
     MeshTextures = []
     MeshUsertext = ""
     MeshAABTree = struct_w3d.MshAABTree()
-	
+
     print("NEW MESH:")
     while file.tell() < chunkEnd:
         Chunktype = ReadLong(file)
@@ -514,7 +518,7 @@ def ReadMesh(file,chunkEnd):
                 print(e)
         else:
             print("Invalid chunktype: %s" %Chunktype)
-            context.report({'ERROR'}, "Invalid chunktype: %s" %Chunktype) 
+            context.report({'ERROR'}, "Invalid chunktype: %s" %Chunktype)
             file.seek(Chunksize,1)
     return struct_w3d.Msh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals,vertInfs = MeshVerticesInfs,faces = MeshFaces,userText = MeshUsertext,
                 shadeIds = MeshShadeIds, matlheader = [],shaders = [],vertMatls = MeshVerticeMats , textures = MeshTextures, matlPass = MeshMaterialPass, aabtree = MeshAABTree)
@@ -541,7 +545,7 @@ def LoadSKL(givenfilepath, filename):
         Chunknumber += 1
     file.close()
     return Hierarchy
-	
+
 def createArmature(Hierarchy, amtName):
     amt = bpy.data.armatures.new(Hierarchy.header.hierName)
     amt.show_names = True
@@ -552,33 +556,33 @@ def createArmature(Hierarchy, amtName):
     bpy.context.scene.objects.link(rig) # Link the object to the active scene
     bpy.context.scene.objects.active = rig
     bpy.ops.object.mode_set(mode = 'EDIT')
-    bpy.context.scene.update()	
+    bpy.context.scene.update()
 
 	#create the bones from the pivots
     root = Vector((0.0, 0.0, 0.0))
-    for pivot in Hierarchy.pivots:			
+    for pivot in Hierarchy.pivots:
         if not pivot.isbone:
             continue
         bone = amt.edit_bones.new(pivot.name)
-        if pivot.parentID > 0:						
+        if pivot.parentID > 0:
             parent_pivot =  Hierarchy.pivots[pivot.parentID]
             parent = amt.edit_bones[parent_pivot.name]
             #if parent.length < 0.02:
-            #    parent.tail = root + Vector((0, 0.2, 0))    
+            #    parent.tail = root + Vector((0, 0.2, 0))
             bone.parent = parent
-        bone.head = root 
+        bone.head = root
         bone.tail = root + Vector((0.0, 0.02, 0.0))
-			
+
     #pose the bones
     bpy.ops.object.mode_set(mode = 'POSE')
-    for pivot in Hierarchy.pivots:	
+    for pivot in Hierarchy.pivots:
         if not pivot.isbone:
             continue
         bone = rig.pose.bones[pivot.name]
         bone.location = pivot.position
         bone.rotation_mode = 'QUATERNION'
         bone.rotation_euler = pivot.eulerAngles
-        bone.rotation_quaternion = pivot.rotation 
+        bone.rotation_quaternion = pivot.rotation
         #rot90 = Quaternion((0.707, 0, 0, 0.707))
 
     bpy.ops.object.mode_set(mode = 'OBJECT')
@@ -594,7 +598,7 @@ def MainImport(givenfilepath, self, context):
     Meshes = []
     Hierarchy = struct_w3d.Hiera()
     HLod = struct_w3d.HLod()
-    amtName = ""	
+    amtName = ""
 
     while file.tell() < filesize:
         data = ReadLong(file)
@@ -632,16 +636,16 @@ def MainImport(givenfilepath, self, context):
         Chunknumber += 1
 
     file.close()
-	
-	##load skeleton (_skl.w3d) file if needed 
+
+	##load skeleton (_skl.w3d) file if needed
     if HLod.header.modelName != HLod.header.HTreeName:
         try:
             Hierarchy = LoadSKL(givenfilepath, HLod.header.HTreeName)
         except:
-            context.report({'ERROR'}, "skeleton file not found: " + HLod.header.HTreeName) 
-			
+            context.report({'ERROR'}, "skeleton file not found: " + HLod.header.HTreeName)
+
     #test for non_bone_pivots
-    for obj in HLod.lodArray.subObjects: 
+    for obj in HLod.lodArray.subObjects:
         Hierarchy.pivots[obj.boneIndex].isbone = 0
 
     #create skeleton if needed
@@ -700,7 +704,7 @@ def MainImport(givenfilepath, self, context):
                     print(ddspath)
                     found_img = True
                 except:
-                    context.report({'ERROR'}, "texture file not found: " + basename) 
+                    context.report({'ERROR'}, "texture file not found: " + basename)
                     print("Cannot load image %s" % os.path.dirname(givenfilepath)+"/"+basename)
 
             # Create material
@@ -733,18 +737,18 @@ def MainImport(givenfilepath, self, context):
                         mesh_ob.location =  pivot.position
                         mesh_ob.rotation_euler = pivot.eulerAngles
                         mesh_ob.rotation_quaternion = pivot.rotation
-						
+
                         #test if the pivot has a parent pivot and parent them if it has
                         if pivot.parentID > 0:
                             parent_pivot = Hierarchy.pivots[pivot.parentID]
                             parent = bpy.data.armatures[amtName].bones[parent_pivot.name]
-							
+
                             #bpy.ops.object.select_all(action='DESELECT') #deselect all object
 
                             #parent.select = True
                             #mesh_ob.select = True
 
-                            #bpy.context.scene.objects.active = parent 
+                            #bpy.context.scene.objects.active = parent
                             #bpy.ops.object.parent_set(type = 'BONE')
 
             elif type == 131072 or type == 163840:
@@ -764,7 +768,7 @@ def MainImport(givenfilepath, self, context):
                         vertIDs = []
                         vertIDs.append(i)
                 mesh_ob.vertex_groups[boneID].add(vertIDs, weight, 'REPLACE')
-						
+
                 mod = mesh_ob.modifiers.new(amtName, 'ARMATURE')
                 mod.object = rig
                 mod.use_bone_envelopes = False

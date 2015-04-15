@@ -25,5 +25,21 @@ def WriteFixedString(string,file):
 	for i in xrange(nullbytes)
 		file.write(struct.pack("c",'\0'))
 
+def WriteShort(num,file):
+    file.write(struct.pack("<H",num))
+
+def WriteShortSigned(num,file):
+    file.write(struct.pack("<h",num))
+
+def WriteLong(num,file):
+    file.write(struct.pack("<L",num))
+
+def WriteLongSigned(num,file):
+    file.write(struct.pack("<l",num))
+
+def WriteFloat(num,file):
+    file.write(struct.pack("<f",num))
+
+
 def MainExport(givenfilepath, self, context):
 	print("Run Export")
