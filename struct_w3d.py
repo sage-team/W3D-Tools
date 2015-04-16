@@ -11,34 +11,38 @@ class Struct:
             attrs = filter (lambda x: x[0:2] != "__", dir(self))
             for n in range(len(argv)):
                 setattr(self, attrs[n], argv[n])
-
+				
+class Version(Struct):
+    major = 0 
+    minor = 0
+				
 class RGBA(Struct):
     r = 0
     g = 0
     b = 0
     a = 0
 
-class HieraHeader(Struct):
-    version = 0
-    hierName = ""
+class HierarchyHeader(Struct):
+    version = Version()
+    name = ""
     pivotCount = 0
     centerPos = Vector((0.0, 0.0 ,0.0))
 
-class HieraPivot(Struct):
+class HierarchyPivot(Struct):
     name = ""
     parentID = 0
     position = Vector((0.0, 0.0 ,0.0))
     eulerAngles = Vector((0.0, 0.0 ,0.0))
     rotation = Quaternion((0.0, 0.0, 0.0, 0.0))
-    isbone = 1 
+    isBone = 1 
 
-class Hiera(Struct):
-    header = HieraHeader()
-    pivots = HieraPivot()
+class Hierarchy(Struct):
+    header = HierarchyHeader()
+    pivots = HierarchyPivot()
     pivot_fixups = []
 
-class AABox(Struct): 
-    version = 0
+class Box(Struct): 
+    version = Version()
     attributes = 0
     name = ""
     color = RGBA()
@@ -46,7 +50,7 @@ class AABox(Struct):
     extend = Vector((0.0, 0.0 ,0.0))
 	
 class HLodHeader(Struct):
-    version = 0
+    version = Version()
     lodCount = 0
     modelName = ""
     HTreeName = ""
@@ -66,8 +70,36 @@ class HLodArray(Struct):
 class HLod(Struct):
     header = HLodHeader()
     lodArray = HLodArray()
+	
+class AnimationHeader(Struct):
+    version = Version()
+    name = ""
+    hieraName = ""
+    numFrames = 0
+    frameRate = 0
+	
+class AnimationChannel(Struct):
+    firstFrame = 0
+    lastFrame = 0
+    vectorLen = 0
+    type = 0
+    pivot = 0
+    pad = 0 # padding?
+    data = []
+	
+class Animation(Struct):
+    header = AnimationHeader()
+    channels = [] 
+	
+class CompressedAnimationHeader(Struct):
+    version = Version()
+    name = ""
+    hieraName = ""
+    numFrames = 0
+    frameRate = 0
+    flavor = 0
     
-class VtxMat(Struct):
+class VertexMaterial(Struct):
     attributes = 0   #uint32
     ambient = RGBA() #alpha is only padding in this and below
     diffuse = RGBA()
@@ -77,36 +109,81 @@ class VtxMat(Struct):
     opacity  = 0.0       #how opaque the material is, 0.0 = invisible, 1.0 = fully opaque (default = 1) -float
     translucency = 0.0   #how much light passes through the material. (default = 0) -float
 
-class MshMatSetInfo(Struct):
+class MeshMaterialSetInfo(Struct):
     passCount = 0
     vertMatlCount = 0
     shaderCount = 0
     TextureCount = 0
 
-class MshFace(Struct):
+class MeshFace(Struct):
     vertIds = Vector((0.0, 0.0 ,0.0))
     attrs = 0
     normal = Vector((0.0, 0.0 ,0.0))
     distance = 0.0
 
-class MshTexStage(Struct):
+class MeshTextureStage(Struct):
     txIds = []
     txCoords = []
 
-class MshMatPass(Struct):
+class MeshMaterialPass(Struct):
     vmIds = 0
     shaderIds = 0
-    txStage = MshTexStage()
+    txStage = MeshTextureStage()
 
-class MshMat(Struct):
+class MeshMaterial(Struct):
     vmName = ""
-    vmInfo = VtxMat()
+    vmInfo = VertexMaterial()
     vmArgs0 = ""
     vmArgs1 = ""
 
-class MshTex(Struct):
+class MeshTexture(Struct):
     txfilename = ""
     txinfo = ""
+	
+class TextureInfo(Struct):
+    attributes = 0 #uint16
+    animType = 0 #uint16
+    frameCount = 0 #uint32
+    frameRate = 0.0 #float32
+	
+class MeshShader(Struct):
+	depthCompare = 0 
+	depthMask = 0 
+	colorMask = 0 
+	destBlend = 0 
+	fogFunc = 0 
+	priGradient = 0 
+	secGradient = 0 
+	srcBlend = 0
+	texturing = 0
+	detailColorFunc = 0
+	detailAlphaFunc = 0
+	shaderPreset = 0
+	alphaTest = 0
+	postDetailColorFunc = 0
+	postDetailAlphaFunc = 0 
+	pad = 0
+	
+#W3D_NORMALMAP_HEADER_TYPES
+#    W3D_NORMTYPE_TEXTURE = 1,
+#    W3D_NORMTYPE_BUMP = 2,
+#    W3D_NORMTYPE_COLORS = 5,
+#    W3D_NORMTYPE_ALPHA = 7	
+class MeshNormalMapHeader(Struct):
+    number = 0
+    typeName = ""
+    reserved = 0
+
+class MeshNormalMapEntryStruct(Struct):
+    typeFlag = 0
+    typeSize = 0
+    infoName = []
+    itemSize = 0
+    itemName = []
+	
+class MeshNormalMap(Struct):
+    header = MeshNormalMapHeader()
+    entryStructs = []
 	
 class AABTreeHeader(Struct):
     nodeCount = 0
@@ -118,13 +195,13 @@ class AABTreeNode(Struct):
     FrontOrPoly0 = 0
     BackOrPolyCount = 0
 
-class MshAABTree(Struct):
+class MeshAABTree(Struct):
     header = AABTreeHeader()
     polyIndices = []
     nodes = []
 
-class MshHeader(Struct):
-    version = 0
+class MeshHeader(Struct):
+    version = Version()
     attrs = 0
     meshName = ""
     containerName = ""
@@ -143,19 +220,13 @@ class MshHeader(Struct):
     sphRadius = 0.0
     userText  = ""
 
-class TexInfo(Struct):
-    attributes = 0 #uint16
-    animType = 0 #uint16
-    frameCount = 0 #uint32
-    frameRate = 0.0 #float32
-
-class Tex(Struct):
+class Texture(Struct):
     linkMap = 0
     name = ""
-    textureInfo = TexInfo()
+    textureInfo = TextureInfo()
 
-class Msh(Struct):
-    header = MshHeader()
+class Mesh(Struct):
+    header = MeshHeader()
     verts = []
     normals = []
     vertInfs = []
@@ -165,5 +236,5 @@ class Msh(Struct):
     shaders = []
     vertMatls = []
     textures = []
-    matlPass = MshMatPass()
-    aabtree = MshAABTree()
+    matlPass = MeshMaterialPass()
+    aabtree = MeshAABTree()
