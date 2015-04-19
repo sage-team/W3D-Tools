@@ -116,7 +116,7 @@ class MeshMaterialSetInfo(Struct):
     TextureCount = 0
 
 class MeshFace(Struct):
-    vertIds = Vector((0.0, 0.0 ,0.0))
+    vertIds = []
     attrs = 0
     normal = Vector((0.0, 0.0 ,0.0))
     distance = 0.0

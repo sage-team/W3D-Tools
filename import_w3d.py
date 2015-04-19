@@ -52,9 +52,6 @@ def ReadRGBA(file):
 def GetChunkSize(data):
     return (data & int(0x7FFFFFFF))
 
-def GetVersion(data):
-    return struct_w3d.Version(major = (data)>>16, minor = (data) & 0xFFFF)
-
 def ReadByte(file):
     #binary_format = "<l" long
     return (struct.unpack("<L",file.read(4))[0])
@@ -88,6 +85,9 @@ def ReadQuaternion(file):
     quat = (ReadFloat(file), ReadFloat(file), ReadFloat(file), ReadFloat(file))
     #change order from xyzw to wxyz
     return Quaternion((quat[3], quat[0], quat[1], quat[2]))
+	
+def GetVersion(data):
+    return struct_w3d.Version(major = (data)>>16, minor = (data) & 0xFFFF)
 	
 #######################################################################################
 # Hierarchy
