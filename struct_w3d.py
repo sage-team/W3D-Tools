@@ -1,4 +1,6 @@
-#Struct
+#Written by Stephan Vedder and Michael Schnabel
+#Last Modification 19.4.2015
+#Structs of the W3D Format used in games by Westwood & EA
 from mathutils import Vector, Quaternion
 
 class Struct:
@@ -164,26 +166,25 @@ class MeshShader(Struct):
 	postDetailAlphaFunc = 0 
 	pad = 0
 	
-#W3D_NORMALMAP_HEADER_TYPES
-#    W3D_NORMTYPE_TEXTURE = 1,
-#    W3D_NORMTYPE_BUMP = 2,
-#    W3D_NORMTYPE_COLORS = 5,
-#    W3D_NORMTYPE_ALPHA = 7	
 class MeshNormalMapHeader(Struct):
     number = 0
     typeName = ""
     reserved = 0
 
 class MeshNormalMapEntryStruct(Struct):
-    typeFlag = 0
-    typeSize = 0
-    infoName = []
-    itemSize = 0
-    itemName = []
+    unknown = 0
+    diffuseTexName = ""
+    unknown_nrm = 0
+    normalMap = ""
+    ambientColor = []
+    diffuseColor = []
+    specularColor = []
+    specularExponent = 0.0
+    alphaTestEnable = 0
 	
 class MeshNormalMap(Struct):
     header = MeshNormalMapHeader()
-    entryStructs = []
+    entryStruct = MeshNormalMapEntryStruct()
 	
 class AABTreeHeader(Struct):
     nodeCount = 0
@@ -219,6 +220,12 @@ class MeshHeader(Struct):
     sphCenter = Vector((0.0, 0.0 ,0.0))
     sphRadius = 0.0
     userText  = ""
+	
+class MeshVertInfs(Struct):
+    boneIdx = 0
+    xtraIdx = 0
+    boneInf = 0.0
+    xtraInf = 0.0
 
 class Texture(Struct):
     linkMap = 0
@@ -237,4 +244,5 @@ class Mesh(Struct):
     vertMatls = []
     textures = []
     matlPass = MeshMaterialPass()
+    normalMap = MeshNormalMap()
     aabtree = MeshAABTree()
