@@ -24,8 +24,6 @@ from . import struct_w3d
 
 #load and create animation data
 
-#create AABTree boxes
-
 #support for 2 bone vertex influences
 
 #what are chunks 96 97 for? (two additional vertex normals for bump mapping?)
@@ -863,10 +861,17 @@ def LoadTexture(context, givenfilepath, mesh, texName):
     if found_img == True:
         cTex = bpy.data.textures.new(texName, type = 'IMAGE')
         cTex.image = img
+		
+		#for normal maps
+        #cTex.use_normal_map = True
+        #cTex.filter_size = 0.1
+        #cTex.use_filter_size_min = True
+		
         mTex.texture = cTex					
 				
     mTex.texture_coords = 'UV'
     mTex.mapping = 'FLAT'
+    mTex.normal_factor = 1.0
 				
 #######################################################################################
 # Skeleton / Armature 
@@ -1118,6 +1123,10 @@ def MainImport(givenfilepath, self, context):
                 mod.object = rig
                 mod.use_bone_envelopes = False
                 mod.use_vertex_groups = True
+				
+				#to keep the transformations while mesh is in edit mode
+                mod.show_in_editmode = True
+                mod.show_on_cage = True
             else:
                 context.report({'ERROR'}, "unsupported meshtype attribute: %i" %type)
         bpy.context.scene.objects.link(mesh_ob) # Link the object to the active scene
