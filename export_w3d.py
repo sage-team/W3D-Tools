@@ -18,13 +18,17 @@ from . import struct_w3d
 
 #fix WriteRGBA method
 
+HEAD = 8 #4(long = chunktype) + 4 (long = chunksize)
+
 #######################################################################################
 # Basic Methods
 #######################################################################################
 
 def WriteString(file, string):
 	#TODO: check if it does write nullterminated strings
-   	file.write(string)
+    file.write(bytes(string, 'UTF-8'))
+	#write binary 0 to file
+    file.write(struct.pack('B', 0))
 
 def WriteFixedString(file, string):
 	#truncate the string to 16
@@ -47,10 +51,14 @@ def WriteLongFixedString(file, string):
 		file.write(struct.pack("B", 0))
 		
 def WriteRGBA(file, rgba):
-    WriteUnsignedByte(file, rgba.r)
-    WriteUnsignedByte(file, rgba.g)
-    WriteUnsignedByte(file, rgba.b)
-    WriteUnsignedByte(file, rgba.a)
+    file.write(struct.pack("B", rgba.r))
+    file.write(struct.pack("B", rgba.g))
+    file.write(struct.pack("B", rgba.b))
+    file.write(struct.pack("B", rgba.a))
+	#WriteUnsignedByte(file, rgba.r)
+    #WriteUnsignedByte(file, rgba.g)
+    #WriteUnsignedByte(file, rgba.b)
+    #WriteUnsignedByte(file, rgba.a)
 
 def WriteLong(file, num):
     file.write(struct.pack("<L", num))
@@ -99,6 +107,66 @@ def triangulate(mesh):
     bmesh.ops.triangulate(bm, faces = bm.faces)
     bm.to_mesh(mesh)
     bm.free()
+	
+#######################################################################################
+# Hierarchy
+#######################################################################################
+
+def WriteHierarchyHeader(file, header):
+    WriteLong(file, 257) #chunktype
+    WriteLong(file, 36) #chunksize
+	
+    WriteLong(file, header.version)
+    WriteFixedString(file, header.name)
+    WriteLong(file, header.pivotCount)
+    WriteVector(file, header.centerPos)
+
+def WritePivots(file, pivots):
+    WriteLong(file, 258) #chunktype
+    WriteLong(file, len(pivots) * 60) #chunksize
+	
+    for pivot in pivots:
+        WriteFixedString(file, pivot.name)
+        WriteSignedLong(file, pivot.parentID)
+        WriteVector(file, pivot.position)
+        WriteVector(file, pivot.eulerAngles)
+        WriteQuaternion(file, pivot.rotation)
+
+def WritePivotFixups(file, pivot_fixups):
+    WriteLong(file, 259) #chunktype
+    WriteLong(file, len(pivot_fixups) * 12) #chunksize
+	
+    for fixup in pivot_fixups: 
+        WriteVector(file, fixup)
+
+def WriteHierarchy(file, size, hierarchy):
+    WriteLong(file, 256) #chunktype
+    
+    headerSize = 36
+    pivotsSize = len(pivots) * 60
+    pivotFixupsSize = len(pivot_fixups) * 12
+    size = HEAD + headerSize + HEAD + pivotSize + HEAD + pivotFixupsSize 
+	
+    WriteLong(file, size) #chunksize
+ 
+    WriteHierarchyHeader(file, hierarchy.header)
+    WritePivots(file, hierarchy.pivots)
+    WritePivotFixups(file, hierarchy.pivot_fixups)
+	
+#######################################################################################
+# Box
+#######################################################################################	
+
+def WriteBox(file, box):
+    WriteLong(file, 1856) #chunktype
+    WriteLong(file, 44) #chunksize
+	
+    WriteLong(file, MakeVersion(box.version)) 
+    WriteLong(file, box.attributes)
+    WriteLongFixedString(file, box.name)
+    WriteRGBA(file, box.color)
+    WriteVector(file, box.center)
+    WriteVector(file, box.extend)
 	
 #######################################################################################
 # Vertices
@@ -152,14 +220,14 @@ def WriteMeshFaceArray(file, size, faces):
 # Materials
 #######################################################################################	
 
-def WriteW3DMaterial(file, size, mat):
+def WriteW3DMaterial(file, mat):
     WriteLong(file, 44) #chunktype
-    WriteLong(file, 16) #chunksize  #has to be size of the string
+    WriteLong(file, len(mat.vmName)+1) #chunksize  #has to be size of the string plus binary 0
 	
-    WriteString(mat.vmName)
+    WriteString(file, mat.vmName)
 	
     WriteLong(file, 45) #chunktype
-    WriteLong(file, size) #chunksize 
+    WriteLong(file, 32) #chunksize 
 	
     WriteLong(file, mat.vmInfo.attributes)
     WriteRGBA(file, mat.vmInfo.ambient)
@@ -170,37 +238,22 @@ def WriteW3DMaterial(file, size, mat):
     WriteFloat(file, mat.vmInfo.opacity)
     WriteFloat(file, mat.vmInfo.translucency)
 	
-    if vmArgs0size > 0:
+    if len(mat.vmArgs0) > 0:
         WriteLong(file, 46) #chunktype
-        WriteLong(file, vmArgs0size) #chunksize 
+        WriteLong(file, len(mat.vmArgs0)+1) #chunksize 
         WriteString(file, mat.vmArgs0)
     
-	if vmArgs1size > 0:
+    if len(mat.vmArgs1) > 0:
         WriteLong(file, 47) #chunktype
-        WriteLong(file, vmArgs1size) #chunksize 
+        WriteLong(file, len(mat.vmArgs1)+1) #chunksize 
         WriteString(file, mat.vmArgs1)
 
 def WriteMeshMaterialArray(file, size, matls):
     WriteLong(file, 43) #chunktype
     WriteLong(file, size) #chunksize
 
-    for mat in mats:
-        WriteW3DMaterial(fil, size, mat)
-	
-#######################################################################################
-# Box
-#######################################################################################	
-
-def WriteBox(file, box):
-    WriteLong(file, 1856) #chunktype
-    WriteLong(file, 44) #chunksize
-	
-    WriteLong(file, MakeVersion(box.version)) 
-    WriteLong(file, box.attributes)
-    WriteLongFixedString(file, box.name)
-    WriteRGBA(file, box.color)
-    WriteVector(file, box.center)
-    WriteVector(file, box.extend)
+    for mat in matls:
+        WriteW3DMaterial(file, mat)
  	
 #######################################################################################
 # Mesh
@@ -231,14 +284,14 @@ def WriteMeshHeader(file, size, header):
 def WriteMesh(file, mesh):
     WriteLong(file, 0) #chunktype
 	
-    head = 8 #4(long = chunktype) + 4 (long = chunksize)
     headerSize = 116
     vertSize = len(mesh.verts)*12
     normSize = len(mesh.normals)*12
     faceSize = len(mesh.faces)*32
     infSize = len(mesh.vertInfs)*8
-    matSize = len(mesh.vertMatls)
-    size = head + headerSize + head + vertSize + head + normSize + head + faceSize + head + infSize + head + matSize
+    matSize =  len(mesh.vertMatls[0].vmName) + 1 + 34 + len(mesh.vertMatls[0].vmArgs0) + 1 + len(mesh.vertMatls[0].vmArgs1) + 1
+	
+    size = HEAD + headerSize + HEAD + vertSize + HEAD + normSize + HEAD + faceSize + HEAD + infSize #+ HEAD + matSize
     WriteLong(file, size) #chunksize
 	
     print("### NEW MESH: ###")
@@ -250,10 +303,10 @@ def WriteMesh(file, mesh):
     print("Normals")
     WriteMeshFaceArray(file, faceSize, mesh.faces)
     print("Faces")
-    WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
-    print("Vertex Influences")
-    WriteMeshVertexMaterials(file, matSize, mesh.vertMatls)
-    print("Materials")
+    #WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
+    #print("Vertex Influences")
+    #WriteMeshMaterialArray(file, matSize, mesh.vertMatls)
+    #print("Materials")
 	
 #######################################################################################
 # SKN file
@@ -312,8 +365,8 @@ def WriteSkn(file, context):
             group_lookup = {g.index: g.name for g in mesh_ob.vertex_groups}
             groups = {name: [] for name in group_lookup.values()}
             for v in mesh.vertices:
+                vertInf = struct_w3d.MeshVertexInfluences()
                 if len(v.groups) > 0:
-                    vertInf = struct_w3d.MeshVertInfs()
                     vertInf.boneIdx = v.groups[0].group
                     vertInf.boneInf = v.groups[0].weight * 100
                 if len(v.groups) > 1:
@@ -325,8 +378,13 @@ def WriteSkn(file, context):
                 Mesh.vertInfs.append(vertInf)
 				
             for mat in mesh.materials:
-                print(mat.name)
+                meshMaterial = struct_w3d.MeshMaterial()
                 
+                meshMaterial.vmName = (os.path.splitext(os.path.basename(mat.name))[1])[1:]
+                meshVMInfo = struct_w3d.VertexMaterial()
+				
+                meshMaterial.vmInfo = meshVMInfo
+                Mesh.vertMatls.append(meshMaterial)
 
             Mesh.header = Header			
             WriteMesh(file, Mesh)
@@ -341,6 +399,6 @@ def MainExport(givenfilepath, self, context):
 	#switch to object mode
     if bpy.ops.object.mode_set.poll():
         bpy.ops.object.mode_set(mode='OBJECT')
-    file = open(givenfilepath,"wb")
+    sknFile = open(givenfilepath,"wb")
 	
-    WriteSkn(file, context) 
+    WriteSkn(sknFile, context) 

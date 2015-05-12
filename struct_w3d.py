@@ -135,8 +135,8 @@ class MeshMaterialPass(Struct):
 class MeshMaterial(Struct):
     vmName = ""
     vmInfo = VertexMaterial()
-    vmArgs0 = ""
-    vmArgs1 = ""
+    vmArgs0 = "rr" #mapping
+    vmArgs1 = "rrr" #mapping
 
 class MeshTexture(Struct):
     txfilename = ""
@@ -221,7 +221,7 @@ class MeshHeader(Struct):
     sphRadius = 0.0
     userText  = ""
 	
-class MeshVertInfs(Struct):
+class MeshVertexInfluences(Struct):
     boneIdx = 0
     xtraIdx = 0
     boneInf = 0.0

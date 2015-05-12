@@ -14,7 +14,9 @@ from . import struct_w3d
 
 #TODO 
 
-#error reports not working because of the last lines (set render mode to textured)
+#proper creation of materials (color etc)
+
+#support for multiple textures for one mesh (also multiple uv maps)
 
 #correct insertion of key frames
 
@@ -137,6 +139,10 @@ def ReadHierarchy(file,chunkEnd):
             file.seek(chunkSize, 1)	
     return struct_w3d.Hierarchy(header = HierarchyHeader, pivots = Pivots, pivot_fixups = Pivot_fixups)
 
+#######################################################################################
+# AABox
+#######################################################################################	
+	
 def ReadAABox(file,chunkEnd):
     version = ReadLong(file)
     attributes = ReadLong(file)
@@ -451,7 +457,7 @@ def ReadMeshVerticesArray(file, chunkEnd):
 def ReadMeshVertexInfluences(file, chunkEnd):
     vertInfs = []
     while file.tell()  < chunkEnd:
-        vertInf = struct_w3d.MeshVertInfs()
+        vertInf = struct_w3d.MeshVertexInfluences()
         vertInf.boneIdx = ReadShort(file)
         vertInf.xtraIdx = ReadShort(file)
         vertInf.boneInf = ReadShort(file)/100
@@ -621,7 +627,7 @@ def ReadMeshHeader(file):
     sphRadius =  ReadFloat(file))
     return result
 
-def ReadMesh(file, chunkEnd):
+def ReadMesh(self, file, chunkEnd):
     MeshVerticesInfs = []
     MeshVertices = []
     MeshVerticeMats = []
@@ -650,6 +656,7 @@ def ReadMesh(file, chunkEnd):
                 MeshVertices = ReadMeshVerticesArray(file,subChunkEnd)
                 print("Vertices")
             except:
+                self.report({'ERROR'}, "Mistake while reading Vertices (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading Vertices (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -659,6 +666,7 @@ def ReadMesh(file, chunkEnd):
                 ReadMeshVerticesArray(file,subChunkEnd)
                 print("Vertices-Copy")
             except:
+                self.report({'ERROR'}, "Mistake while reading Vertices-Copy (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading Vertices-Copy (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -667,6 +675,7 @@ def ReadMesh(file, chunkEnd):
                 MeshNormals = ReadMeshVerticesArray(file,subChunkEnd)
                 print("Normals")
             except:
+                self.report({'ERROR'}, "Mistake while reading Normals (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading Normals (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -675,6 +684,7 @@ def ReadMesh(file, chunkEnd):
                 ReadMeshVerticesArray(file,subChunkEnd)
                 print("Normals-Copy")
             except:
+                self.report({'ERROR'}, "Mistake while reading Normals-Copy (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading Normals-Copy (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -684,6 +694,7 @@ def ReadMesh(file, chunkEnd):
                 print("Usertext")
                 print(MeshUsertext)
             except:
+                self.report({'ERROR'}, "Mistake while reading Usertext (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading Usertext (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -692,7 +703,8 @@ def ReadMesh(file, chunkEnd):
                 MeshVerticesInfs = ReadMeshVertexInfluences(file,subChunkEnd)
                 print("VertInfs")
             except:
-                print("Mistake while reading Vertex Influences (Mesh) Byte:%s" % file.tell())
+                self.report({'ERROR'}, "Mistake while reading Usertext (Mesh) Byte:%s" % file.tell())
+                print("Mistake while reading Usertext (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
         elif Chunktype == 31:
@@ -700,6 +712,7 @@ def ReadMesh(file, chunkEnd):
                 MeshHeader = ReadMeshHeader(file)
                 print("Header")
             except:
+                self.report({'ERROR'}, "Mistake while reading Mesh Header (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading Mesh Header (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -708,6 +721,7 @@ def ReadMesh(file, chunkEnd):
                 MeshFaces = ReadMeshFaceArray(file, subChunkEnd)
                 print("Faces")
             except:
+                self.report({'ERROR'}, "Mistake while reading Mesh Faces (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading Mesh Faces (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -716,6 +730,7 @@ def ReadMesh(file, chunkEnd):
                 MeshShadeIds = ReadLongArray(file,subChunkEnd)
                 print("Shade IDs")
             except:
+                self.report({'ERROR'}, "Mistake while reading MeshShadeIds (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading MeshShadeIds (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -724,6 +739,7 @@ def ReadMesh(file, chunkEnd):
                 MeshInfo = ReadMeshMaterialSetInfo(file)
                 print("Info")
             except:
+                self.report({'ERROR'}, "Mistake while reading MeshInfo (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading MeshInfo (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -732,6 +748,7 @@ def ReadMesh(file, chunkEnd):
                 MeshShaders = ReadMeshShaderArray(file,subChunkEnd)
                 print("MeshShader")
             except:
+                self.report({'ERROR'}, "Mistake while reading MeshShaders (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading MeshShaders (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -740,6 +757,7 @@ def ReadMesh(file, chunkEnd):
                 MeshVerticeMats = ReadMeshMaterialArray(file,subChunkEnd)
                 print("VertMats")
             except:
+                self.report({'ERROR'}, "Mistake while reading VerticeMaterials (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading VerticeMaterials (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -748,6 +766,7 @@ def ReadMesh(file, chunkEnd):
                 MeshTextures = ReadTextureArray(file,subChunkEnd)
                 print("Textures")
             except:
+                self.report({'ERROR'}, "Mistake while reading MeshTextures (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading MeshTextures (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -756,6 +775,7 @@ def ReadMesh(file, chunkEnd):
                 MeshMaterialPass = ReadMeshMaterialPass(file,subChunkEnd)
                 print("MatPass")
             except:
+                self.report({'ERROR'}, "Mistake while reading MeshMaterialPass (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading MeshMaterialPass (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -764,6 +784,7 @@ def ReadMesh(file, chunkEnd):
                 MeshNormalMap = ReadNormalMap(file, subChunkEnd)
                 print("NormalMap")
             except:
+                self.report({'ERROR'}, "Mistake while reading NormalMap (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading NormalMap (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -773,6 +794,7 @@ def ReadMesh(file, chunkEnd):
                 ReadMeshVerticesArray(file, subChunkEnd)
                 print("unknown Chunk 96 (probably normals)")
             except:
+                self.report({'ERROR'}, "Mistake while reading unknown Chunk 96 (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading unknown Chunk 96 (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -782,6 +804,7 @@ def ReadMesh(file, chunkEnd):
                 ReadMeshVerticesArray(file, subChunkEnd)
                 print("unknown Chunk 97 (probably normals)")
             except:
+                self.report({'ERROR'}, "Mistake while reading unknown Chunk 97 (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading unknown Chunk 97 (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
@@ -790,12 +813,13 @@ def ReadMesh(file, chunkEnd):
                 MeshAABTree = ReadAABTree(file,subChunkEnd)
                 print("AABTree")
             except:
+                self.report({'ERROR'}, "Mistake while reading AABTree (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading AABTree (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
         else:
             print("Invalid chunktype: %s" %Chunktype)
-            #context.report({'ERROR'}, "Invalid chunktype: %s" %Chunktype)
+            self.report({'ERROR'}, "Invalid chunktype: %s" %Chunktype)
             file.seek(Chunksize,1)
     return struct_w3d.Mesh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals,vertInfs = MeshVerticesInfs,faces = MeshFaces,userText = MeshUsertext,
                 shadeIds = MeshShadeIds, matlheader = [],shaders = MeshShaders, vertMatls = MeshVerticeMats, textures = MeshTextures, matlPass = MeshMaterialPass, normalMap = MeshNormalMap, aabtree = MeshAABTree)
@@ -811,7 +835,7 @@ def createBox(Box):
     z = Box.extend[2]
 
     verts = [(x, y, z), (-x, y, z), (-x, -y, z), (x, -y, z), (x, y, 0), (-x, y, 0), (-x, -y, 0), (x, -y, 0)]
-    faces = [(0,1,2,3), (4,5,6,7), (0,4,5,1), (1,5,6,2), (2,6,7,3), (3,7,4,0)]
+    faces = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)]
 
     cube = bpy.data.meshes.new(name)
     box = bpy.data.objects.new(name, cube)
@@ -946,6 +970,11 @@ def createArmature(Hierarchy, amtName):
         bone.custom_shape = bpy.data.objects["Sphere"]
 
     bpy.ops.object.mode_set(mode = 'OBJECT')
+	
+	#delete the sphere afterwards
+    for ob in bpy.context.scene.objects:
+        ob.select = ob.type == 'MESH' and ob.name.startswith("Sphere")
+        bpy.ops.object.delete()
     return rig
 	
 #######################################################################################
@@ -971,7 +1000,7 @@ def MainImport(givenfilepath, context, self):
         Chunksize =  GetChunkSize(ReadLong(file))
         chunkEnd = file.tell() + Chunksize
         if Chunktype == 0:
-            Meshes.append(ReadMesh(file, chunkEnd))
+            Meshes.append(ReadMesh(self, file, chunkEnd))
             CM = Meshes[len(Meshes)-1]
             file.seek(chunkEnd,0)
 
@@ -1070,6 +1099,14 @@ def MainImport(givenfilepath, context, self):
         for vm in m.vertMatls:
             mat = bpy.data.materials.new(m.header.meshName + "." + vm.vmName)
             mat.use_shadeless = True
+            #mat.specular_color = (float(vm.vmInfo.specular.r), float(vm.vmInfo.specular.g), float(vm.vmInfo.specular.b));
+            #mat.diffuse_color = (float(vm.vmInfo.diffuse.r), float(vm.vmInfo.diffuse.g), float(vm.vmInfo.diffuse.b));
+            print(mat.specular_color)
+            print(mat.diffuse_color)
+            #mat.specular_intensity = vm.vmInfo.shininess;
+            #mat.diffuse_intensity = vm.vmInfo.opacity;
+            print(mat.specular_intensity)
+            print(mat.diffuse_intensity)
             mesh.materials.append(mat)
 			
         for tex in m.textures:
@@ -1137,40 +1174,30 @@ def MainImport(givenfilepath, context, self):
         bpy.context.scene.objects.link(mesh_ob) # Link the object to the active scene
 
     #animation stuff
-	
-	#start_pos = (0,0,0)   
-    #bpy.ops.mesh.primitive_uv_sphere_add(segments=32, size=0.3, location=start_pos)   
-    #bpy.ops.object.shade_smooth()   
-  
-    #positions = (0,0,2),(0,1,2),(3,2,1),(3,4,1),(1,2,1)   
-    #frame_num = 0  
-    #for position in positions:   
-       #bpy.context.scene.frame_set(frame_num)   
-       #bpy.context.active_object.location = position   
-       #bpy.ops.anim.keyframe_insert(type='Location', confirm_success=True)   
-       #frame_num += 10  
-
-	
     if not Animation.header.name == "":	
         pivotName = ""
+        #set end of animation
+        bpy.data.scenes["Scene"].frame_end = Animation.header.numFrames - 1
+		
+		#get the position of the object from the frame before and add the current channels value
+		#with obj.location??
         for channel in Animation.channels:
-            pivot = Hierarchy.pivots[channel.pivot + 1]
+            rest_location = Vector((0, 0, 0))
+            if (channel.pivot - 1 == 0):
+                continue   #skip roottransform
+            pivot = Hierarchy.pivots[channel.pivot - 1]
             if not pivotName == pivot.name:
                 if pivot.isBone:
                     obj = rig.pose.bones[pivot.name]
                 else:
                     obj = bpy.data.objects[pivot.name]
-                rest_location = obj.location
-                print(rest_location[0])
+                rest_location = obj.location.copy()
                 rest_rotation = obj.rotation_quaternion
                 pivotName = pivot.name
             # ANIM_CHANNEL_X
             if channel.type == 0:   
                 #print("x")
                 for frame in range(channel.firstFrame, channel.lastFrame):
-                    #print("####")
-                    #print(rest_location[0])
-                    #print(channel.data[frame - channel.firstFrame] + rest_location[0])
                     bpy.context.scene.frame_set(frame)
                     obj.location = Vector((channel.data[frame - channel.firstFrame] + rest_location[0], rest_location[1], rest_location[2])) 
                     obj.keyframe_insert(data_path='location', frame = frame) 
