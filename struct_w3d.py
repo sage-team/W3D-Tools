@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 19.4.2015
+#Last Modification 13.5.2015
 #Structs of the W3D Format used in games by Westwood & EA
 from mathutils import Vector, Quaternion
 
@@ -40,7 +40,7 @@ class HierarchyPivot(Struct):
 
 class Hierarchy(Struct):
     header = HierarchyHeader()
-    pivots = HierarchyPivot()
+    pivots = []
     pivot_fixups = []
 
 class Box(Struct): 

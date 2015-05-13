@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 06.05.2015
+#Last Modification 13.05.2015
 #Loads the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -275,7 +275,7 @@ def ReadHLodArrayHeader(file):
     HLodArrayHeader.maxScreenSize = ReadFloat(file)
     return HLodArrayHeader
 
-def ReadHLodSubObject(file, chunkEnd):
+def ReadHLodSubObject(file):
     HLodSubObject = struct_w3d.HLodSubObject()
     HLodSubObject.boneIndex = ReadLong(file)
     HLodSubObject.name = ReadLongFixedString(file)
@@ -291,7 +291,7 @@ def ReadHLodArray(file, chunkEnd):
         if chunkType == 1795:
             HLodArrayHeader = ReadHLodArrayHeader(file)
         elif chunkType == 1796:
-            HLodSubObjects.append(ReadHLodSubObject(file, subChunkEnd))
+            HLodSubObjects.append(ReadHLodSubObject(file))
         else:
             file.seek(chunkSize, 1)
     return struct_w3d.HLodArray(header = HLodArrayHeader, subObjects = HLodSubObjects)
@@ -323,7 +323,6 @@ def ReadBox(file,chunkEnd):
     center = ReadVector(file)
     extend = ReadVector(file)
     return struct_w3d.Box(version = version, attributes = attributes, name = name, color = color, center = center, extend = extend)
-	
 	
 #######################################################################################
 # Texture
@@ -952,7 +951,7 @@ def createArmature(Hierarchy, amtName):
             parent = amt.edit_bones[parent_pivot.name]
             bone.parent = parent
         bone.head = root
-        bone.tail = root + Vector((0.0, 0.20, 0.0))
+        bone.tail = root + Vector((0.0, 0.40, 0.0))
 
     #pose the bones
     bpy.ops.object.mode_set(mode = 'POSE')

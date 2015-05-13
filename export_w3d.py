@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 19.4.2015
+#Last Modification 13.5.2015
 #Exports the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -14,9 +14,10 @@ from . import struct_w3d
 
 #TODO 
 
+#recalculate size of vertex material chunk
+
 #support for 2 bone vertex influences
 
-#fix WriteRGBA method
 
 HEAD = 8 #4(long = chunktype) + 4 (long = chunksize)
 
@@ -55,10 +56,6 @@ def WriteRGBA(file, rgba):
     file.write(struct.pack("B", rgba.g))
     file.write(struct.pack("B", rgba.b))
     file.write(struct.pack("B", rgba.a))
-	#WriteUnsignedByte(file, rgba.r)
-    #WriteUnsignedByte(file, rgba.g)
-    #WriteUnsignedByte(file, rgba.b)
-    #WriteUnsignedByte(file, rgba.a)
 
 def WriteLong(file, num):
     file.write(struct.pack("<L", num))
@@ -87,7 +84,7 @@ def WriteVector(file, vec):
     WriteFloat(file, vec[2])
 	
 def WriteQuaternion(file, quat):
-    #change order from wxyz to xyzw
+    #changes the order from wxyz to xyzw
     WriteFloat(file, quat[1])
     WriteFloat(file, quat[2])
     WriteFloat(file, quat[3])
@@ -112,18 +109,18 @@ def triangulate(mesh):
 # Hierarchy
 #######################################################################################
 
-def WriteHierarchyHeader(file, header):
+def WriteHierarchyHeader(file, size, header):
     WriteLong(file, 257) #chunktype
-    WriteLong(file, 36) #chunksize
+    WriteLong(file, size) #chunksize
 	
-    WriteLong(file, header.version)
+    WriteLong(file, MakeVersion(header.version))
     WriteFixedString(file, header.name)
     WriteLong(file, header.pivotCount)
     WriteVector(file, header.centerPos)
 
-def WritePivots(file, pivots):
+def WritePivots(file, size, pivots):
     WriteLong(file, 258) #chunktype
-    WriteLong(file, len(pivots) * 60) #chunksize
+    WriteLong(file, size) #chunksize
 	
     for pivot in pivots:
         WriteFixedString(file, pivot.name)
@@ -132,26 +129,82 @@ def WritePivots(file, pivots):
         WriteVector(file, pivot.eulerAngles)
         WriteQuaternion(file, pivot.rotation)
 
-def WritePivotFixups(file, pivot_fixups):
+def WritePivotFixups(file, size, pivot_fixups):
     WriteLong(file, 259) #chunktype
-    WriteLong(file, len(pivot_fixups) * 12) #chunksize
+    WriteLong(file, size) #chunksize
 	
     for fixup in pivot_fixups: 
         WriteVector(file, fixup)
 
-def WriteHierarchy(file, size, hierarchy):
+def WriteHierarchy(file, hierarchy):
     WriteLong(file, 256) #chunktype
     
     headerSize = 36
-    pivotsSize = len(pivots) * 60
-    pivotFixupsSize = len(pivot_fixups) * 12
-    size = HEAD + headerSize + HEAD + pivotSize + HEAD + pivotFixupsSize 
+    pivotsSize = len(hierarchy.pivots)*60
+    pivotFixupsSize = len(hierarchy.pivot_fixups)*12
+    size = HEAD + headerSize + HEAD + pivotsSize + HEAD + pivotFixupsSize 
 	
     WriteLong(file, size) #chunksize
- 
-    WriteHierarchyHeader(file, hierarchy.header)
-    WritePivots(file, hierarchy.pivots)
-    WritePivotFixups(file, hierarchy.pivot_fixups)
+	
+    print("### NEW HIERARCHY: ###")
+    WriteHierarchyHeader(file, headerSize, hierarchy.header)
+    print("Header")
+    WritePivots(file, pivotsSize, hierarchy.pivots)
+    print("Pivots")
+    WritePivotFixups(file, pivotFixupsSize, hierarchy.pivot_fixups)
+    print("Pivot Fixups")
+	
+#######################################################################################
+# HLod
+#######################################################################################
+
+def WriteHLodHeader(file, size, header):
+    WriteLong(file, 1793) #chunktype
+    WriteLong(file, size) #chunksize
+	
+    WriteLong(file, MakeVersion(header.version))
+    WriteLong(file, header.lodCount)
+    WriteFixedString(file, header.modelName)
+    WriteFixedString(file, header.HTreeName)
+
+def WriteHLodArrayHeader(file, size, arrayHeader):
+    WriteLong(file, 1795) #chunktype
+    WriteLong(file, size) #chunksize
+	
+    WriteLong(file, arrayHeader.modelCount)
+    WriteFloat(file, arrayHeader.maxScreenSize)
+
+def WriteHLodSubObject(file, size, subObject): 
+    WriteLong(file, 1796) #chunktype
+    WriteLong(file, size) #chunksize
+	
+    WriteLong(file, subObject.boneIndex)
+    WriteLongFixedString(file, subObject.name)
+
+def WriteHLodArray(file, size, lodArray, headerSize, subObjectSize):
+    WriteLong(file, 1794) #chunktype
+    WriteLong(file, size) #chunksize
+	
+    WriteHLodArrayHeader(file, headerSize, lodArray.header)
+    for object in lodArray.subObjects:
+        WriteHLodSubObject(file, subObjectSize, object)
+
+def WriteHLod(file, hlod):
+    WriteLong(file, 1792) #chunktype
+	
+    headerSize = 40
+    arrayHeaderSize = 8
+    subObjectSize = 36 
+    arraySize = HEAD + arrayHeaderSize + (HEAD + subObjectSize) * len(hlod.lodArray.subObjects)
+    size = HEAD + headerSize + HEAD + arraySize
+	
+    WriteLong(file, size) #chunksize
+	
+    print("### NEW HLOD: ###")
+    WriteHLodHeader(file, headerSize, hlod.header)
+    print("Header")
+    WriteHLodArray(file, arraySize, hlod.lodArray, arrayHeaderSize, subObjectSize)
+    print("Array")
 	
 #######################################################################################
 # Box
@@ -159,7 +212,7 @@ def WriteHierarchy(file, size, hierarchy):
 
 def WriteBox(file, box):
     WriteLong(file, 1856) #chunktype
-    WriteLong(file, 44) #chunksize
+    WriteLong(file, 68) #chunksize
 	
     WriteLong(file, MakeVersion(box.version)) 
     WriteLong(file, box.attributes)
@@ -289,9 +342,9 @@ def WriteMesh(file, mesh):
     normSize = len(mesh.normals)*12
     faceSize = len(mesh.faces)*32
     infSize = len(mesh.vertInfs)*8
-    matSize =  len(mesh.vertMatls[0].vmName) + 1 + 34 + len(mesh.vertMatls[0].vmArgs0) + 1 + len(mesh.vertMatls[0].vmArgs1) + 1
+    matSize =  HEAD + len(mesh.vertMatls[0].vmName) + 1 + HEAD + 34 + HEAD + len(mesh.vertMatls[0].vmArgs0) + 1 + HEAD + len(mesh.vertMatls[0].vmArgs1) + 1
 	
-    size = HEAD + headerSize + HEAD + vertSize + HEAD + normSize + HEAD + faceSize + HEAD + infSize #+ HEAD + matSize
+    size = HEAD + headerSize + HEAD + vertSize + HEAD + normSize + HEAD + faceSize + HEAD + infSize + HEAD + matSize
     WriteLong(file, size) #chunksize
 	
     print("### NEW MESH: ###")
@@ -303,16 +356,16 @@ def WriteMesh(file, mesh):
     print("Normals")
     WriteMeshFaceArray(file, faceSize, mesh.faces)
     print("Faces")
-    #WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
-    #print("Vertex Influences")
-    #WriteMeshMaterialArray(file, matSize, mesh.vertMatls)
-    #print("Materials")
+    WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
+    print("Vertex Influences")
+    WriteMeshMaterialArray(file, matSize, mesh.vertMatls)
+    print("Materials")
 	
 #######################################################################################
 # SKN file
 #######################################################################################	
 
-def WriteSkn(file, context):
+def WriteSknFile(file, context):
     # Get all the mesh objects in the scene.
     objList = [object for object in bpy.context.scene.objects if object.type == 'MESH']
     containerName = (os.path.splitext(os.path.basename(file.name))[0]).upper()
@@ -323,6 +376,8 @@ def WriteSkn(file, context):
             Box.name = containerName + "." + mesh_ob.name
             ### Box.color = TODO
             Box.center = mesh_ob.location
+            #get box extend
+            #Box.extend = 
 			
             WriteBox(file, Box)
         else:
@@ -388,6 +443,12 @@ def WriteSkn(file, context):
 
             Mesh.header = Header			
             WriteMesh(file, Mesh)
+			
+    HLod = struct_w3d.HLod()
+    WriteHLod(file, HLod)
+
+    Hierarchy = struct_w3d.Hierarchy()
+    WriteHierarchy(file, Hierarchy)
 
 #######################################################################################
 # Main Export
@@ -401,4 +462,6 @@ def MainExport(givenfilepath, self, context):
         bpy.ops.object.mode_set(mode='OBJECT')
     sknFile = open(givenfilepath,"wb")
 	
-    WriteSkn(sknFile, context) 
+    WriteSknFile(sknFile, context) 
+	
+    sknFile.close()
