@@ -14,6 +14,11 @@ from . import struct_w3d
 
 #TODO 
 
+#different material pass chunks in meshes with normal map textures 
+# chunk DCG  // per-vertex diffuse color values (array of W3dRGBAStruct's)
+# chunk 0x3f  63
+
+
 #proper creation of materials (color etc)
 
 #support for multiple textures for one mesh (also multiple uv maps)
@@ -369,6 +374,7 @@ def ReadMeshTextureStage(file,chunkEnd):
     return struct_w3d.MeshTextureStage(txIds = TextureIds, txCoords = TextureCoords)	
 	
 def ReadMeshMaterialPass(file, chunkEnd):
+    # got two different types of material passes depending on if the mesh has bump maps of not
     VertexMaterialIds = []
     ShaderIds = []
     TextureStage = struct_w3d.MeshTextureStage()
@@ -382,6 +388,8 @@ def ReadMeshMaterialPass(file, chunkEnd):
             shaderIds = ReadLongArray(file,subChunkEnd)
         elif chunkType == 72: #Texture Stage
             TextureStage = ReadMeshTextureStage(file,subChunkEnd)
+        elif chunkType == 74: #Texture Coords  
+            TextureStage.txCoords = ReadMeshTextureCoordArray(file,subChunkEnd)  
         else:
             file.seek(chunkSize,1)
     return struct_w3d.MeshMaterialPass(vmIds = VertexMaterialIds, shaderIds = ShaderIds, txStage = TextureStage)
