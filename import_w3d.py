@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 13.05.2015
+#Last Modification 18.05.2015
 #Loads the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -24,9 +24,10 @@ from . import struct_w3d
 
 #load and create animation data
 
-#support for 2 bone vertex influences
+#support for 2 bone vertex influences (are they even used?)
 
-#what are chunks 96 97 for? (two additional vertex normals for bump mapping?)
+#what are chunks 96 97 for? (two additional vertex normals for bump mapping?) seems to be diffuse normals and specular normals
+#but it seems blender does not support that kind of stuff
 
 #######################################################################################
 # Basic Methods
@@ -138,19 +139,6 @@ def ReadHierarchy(file,chunkEnd):
         else:
             file.seek(chunkSize, 1)	
     return struct_w3d.Hierarchy(header = HierarchyHeader, pivots = Pivots, pivot_fixups = Pivot_fixups)
-
-#######################################################################################
-# AABox
-#######################################################################################	
-	
-def ReadAABox(file,chunkEnd):
-    version = ReadLong(file)
-    attributes = ReadLong(file)
-    name = ReadLongFixedString(file)
-    color = ReadRGBA(file)
-    center = ReadVector(file)
-    extend = ReadVector(file)
-    return struct_w3d.AABox(version = version, attributes = attributes, name = name, color = color, center = center, extend = extend)
 
 #######################################################################################
 # Animation
@@ -327,27 +315,6 @@ def ReadBox(file,chunkEnd):
 #######################################################################################
 # Texture
 #######################################################################################	
-			
-def ReadMeshTextureCoordArray(file,chunkEnd):
-    txCoords = []
-    while file.tell() < chunkEnd:
-        txCoords.append((ReadFloat(file),ReadFloat(file)))
-    return txCoords
-
-def ReadMeshTextureStage(file,chunkEnd):
-    while file.tell() < chunkEnd:
-        chunkType = ReadLong(file)
-        chunkSize = GetChunkSize(ReadLong(file))
-        subChunkEnd = file.tell() + chunkSize
-        TextureIds = []
-        TextureCoords = []
-        if chunkType == 73:
-            TextureIds = ReadLongArray(file,subChunkEnd)
-        elif chunkType == 74:
-            TextureCoords = ReadMeshTextureCoordArray(file,subChunkEnd)
-        else:
-            file.seek(chunkSize,1)
-    return struct_w3d.MeshTextureStage(txIds = TextureIds, txCoords = TextureCoords)
 	
 def ReadTexture(file,chunkEnd):
     tex = struct_w3d.Texture()
@@ -380,6 +347,27 @@ def ReadTextureArray(file, chunkEnd):
 # Material
 #######################################################################################	
 	
+def ReadMeshTextureCoordArray(file,chunkEnd):
+    txCoords = []
+    while file.tell() < chunkEnd:
+        txCoords.append((ReadFloat(file),ReadFloat(file)))
+    return txCoords
+
+def ReadMeshTextureStage(file,chunkEnd):
+    while file.tell() < chunkEnd:
+        chunkType = ReadLong(file)
+        chunkSize = GetChunkSize(ReadLong(file))
+        subChunkEnd = file.tell() + chunkSize
+        TextureIds = []
+        TextureCoords = []
+        if chunkType == 73:
+            TextureIds = ReadLongArray(file, subChunkEnd)
+        elif chunkType == 74:
+            TextureCoords = ReadMeshTextureCoordArray(file, subChunkEnd)
+        else:
+            file.seek(chunkSize,1)
+    return struct_w3d.MeshTextureStage(txIds = TextureIds, txCoords = TextureCoords)	
+	
 def ReadMeshMaterialPass(file, chunkEnd):
     VertexMaterialIds = []
     ShaderIds = []
@@ -394,13 +382,11 @@ def ReadMeshMaterialPass(file, chunkEnd):
             shaderIds = ReadLongArray(file,subChunkEnd)
         elif chunkType == 72: #Texture Stage
             TextureStage = ReadMeshTextureStage(file,subChunkEnd)
-        elif chunkType == 74: #Texture Coords
-            TextureStage.txCoords = ReadMeshTextureCoordArray(file,subChunkEnd)
         else:
             file.seek(chunkSize,1)
     return struct_w3d.MeshMaterialPass(vmIds = VertexMaterialIds, shaderIds = ShaderIds, txStage = TextureStage)
 
-def ReadW3DMaterial(file,chunkEnd):
+def ReadMaterial(file,chunkEnd):
     mat = struct_w3d.MeshMaterial()
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
@@ -434,7 +420,7 @@ def ReadMeshMaterialArray(file,chunkEnd):
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell()+chunkSize
         if chunkType == 43:
-            Mats.append(ReadW3DMaterial(file,subChunkEnd))
+            Mats.append(ReadMaterial(file,subChunkEnd))
         else:
             file.seek(chunkSize,1)
     return Mats
@@ -632,7 +618,7 @@ def ReadMesh(self, file, chunkEnd):
     MeshVerticeMats = []
     MeshNormals = []
     MeshHeader = struct_w3d.MeshHeader()
-    MeshInfo = struct_w3d.MeshMaterialSetInfo()
+    MeshMaterialInfo = struct_w3d.MeshMaterialSetInfo()
     MeshFaces = []
     MeshMaterialPass = struct_w3d.MeshMaterialPass()
     MeshTriangles = []
@@ -735,11 +721,11 @@ def ReadMesh(self, file, chunkEnd):
                 print(e)
         elif Chunktype == 40:
             try:
-                MeshInfo = ReadMeshMaterialSetInfo(file)
-                print("Info")
+                MeshMaterialInfo = ReadMeshMaterialSetInfo(file)
+                print("MaterialInfo")
             except:
-                self.report({'ERROR'}, "Mistake while reading MeshInfo (Mesh) Byte:%s" % file.tell())
-                print("Mistake while reading MeshInfo (Mesh) Byte:%s" % file.tell())
+                self.report({'ERROR'}, "Mistake while reading MeshMaterialInfo (Mesh) Byte:%s" % file.tell())
+                print("Mistake while reading MeshMaterialInfo (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
         elif Chunktype == 41:
@@ -820,8 +806,8 @@ def ReadMesh(self, file, chunkEnd):
             print("Invalid chunktype: %s" %Chunktype)
             self.report({'ERROR'}, "Invalid chunktype: %s" %Chunktype)
             file.seek(Chunksize,1)
-    return struct_w3d.Mesh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals,vertInfs = MeshVerticesInfs,faces = MeshFaces,userText = MeshUsertext,
-                shadeIds = MeshShadeIds, matlheader = [],shaders = MeshShaders, vertMatls = MeshVerticeMats, textures = MeshTextures, matlPass = MeshMaterialPass, normalMap = MeshNormalMap, aabtree = MeshAABTree)
+    return struct_w3d.Mesh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals, vertInfs = MeshVerticesInfs,faces = MeshFaces, userText = MeshUsertext,
+                shadeIds = MeshShadeIds, matInfo = MeshMaterialInfo, matlheader = [], shaders = MeshShaders, vertMatls = MeshVerticeMats, textures = MeshTextures, matlPass = MeshMaterialPass, normalMap = MeshNormalMap, aabtree = MeshAABTree)
 
 #######################################################################################
 # create Box
@@ -1100,12 +1086,12 @@ def MainImport(givenfilepath, context, self):
             mat.use_shadeless = True
             #mat.specular_color = (float(vm.vmInfo.specular.r), float(vm.vmInfo.specular.g), float(vm.vmInfo.specular.b));
             #mat.diffuse_color = (float(vm.vmInfo.diffuse.r), float(vm.vmInfo.diffuse.g), float(vm.vmInfo.diffuse.b));
-            print(mat.specular_color)
-            print(mat.diffuse_color)
+            #print(mat.specular_color)
+            #print(mat.diffuse_color)
             #mat.specular_intensity = vm.vmInfo.shininess;
             #mat.diffuse_intensity = vm.vmInfo.opacity;
-            print(mat.specular_intensity)
-            print(mat.diffuse_intensity)
+            #print(mat.specular_intensity)
+            #print(mat.diffuse_intensity)
             mesh.materials.append(mat)
 			
         for tex in m.textures:

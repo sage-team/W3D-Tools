@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 13.5.2015
+#Last Modification 18.05.2015
 #Exports the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -9,7 +9,7 @@ import math
 import sys
 import bmesh
 from bpy.props import *
-from mathutils import Vector, Matrix, Quaternion
+from mathutils import Vector, Quaternion
 from . import struct_w3d
 
 #TODO 
@@ -67,8 +67,9 @@ def WriteShort(file, num):
     file.write(struct.pack("<H", num))
 	
 def WriteLongArray(file, array):
-    print("todo: write Long array")
-	
+    for a in array:
+        WriteLong(file, a)
+
 def WriteFloat(file, num):
     file.write(struct.pack("<f", num))
 
@@ -222,6 +223,115 @@ def WriteBox(file, box):
     WriteVector(file, box.extend)
 	
 #######################################################################################
+# Texture
+#######################################################################################	
+	
+def WriteTexture(file, size, texture):
+    WriteLong(file, 49) #chunktype
+    WriteLong(file, HEAD + len(texture.name) + 1 + HEAD + 12) #chunksize 
+	
+    WriteLong(file, 50) #chunktype
+    WriteLong(file, len(texture.name) + 1) #chunksize 
+    
+    WriteString(file, texture.name)
+	
+    WriteLong(file, 51) #chunktype
+    WriteLong(file, 12) #chunksize 
+	
+    WriteShort(file, texture.textureInfo.attributes)
+    WriteShort(file, texture.textureInfo.animType)
+    WriteLong(file, texture.textureInfo.frameCount)
+    WriteFloat(file, texture.textureInfo.frameRate)
+
+def WriteTextureArray(file, size, textures):
+    WriteLong(file, 48) #chunktype
+    WriteLong(file, size) #chunksize  
+	
+    for texture in textures:
+        WriteTexture(file, texture)
+		
+#######################################################################################
+# Material
+#######################################################################################	
+
+def WriteMeshTextureCoordArray(file, size, texCoords):
+    WriteLong(file, 74) #chunktype
+    WriteLong(file, size) #chunksize 
+    for coord in texCoords:
+        WriteFloat(file, coord[0])
+        WriteFloat(file, coord[1])
+
+def WriteMeshTextureStage(file, size, textureStage):
+    WriteLong(file, 72) #chunktype
+    WriteLong(file, size) #chunksize 
+	
+    WriteLong(file, 73) #chunktype
+    WriteLong(file, len(textureStage.textureIDs) * 4) #chunksize 
+    WriteLongArray(file, textureStage.textureIDs)
+	
+    WriteMeshTextureCoordArray(file, size, textureStage.texCoords)
+
+def WriteMeshMaterialPass(file, size, matlPass):
+    WriteLong(file, 56) #chunktype
+    WriteLong(file, size) #chunksize  
+	
+    WriteLong(file, 57) #chunktype
+    WriteLong(file, len(matlPass.vmIds) * 4) #chunksize  
+	
+    WriteLongArray(file, matlPass.vmIds)
+ 
+    WriteLong(file, 58) #chunktype
+    WriteLong(file, len(matlPass.shaderIds) * 4) #chunksize  
+	
+    WriteLongArray(file, matlPass.shaderIds)
+	
+    WriteMeshTextureStage(file, size, matlPass.txStage)
+
+def WriteMaterial(file, mat):
+    WriteLong(file, 44) #chunktype
+    WriteLong(file, len(mat.vmName)+1) #chunksize  #has to be size of the string plus binary 0
+	
+    WriteString(file, mat.vmName)
+	
+    WriteLong(file, 45) #chunktype
+    WriteLong(file, 32) #chunksize 
+	
+    WriteLong(file, mat.vmInfo.attributes)
+    WriteRGBA(file, mat.vmInfo.ambient)
+    WriteRGBA(file, mat.vmInfo.diffuse)
+    WriteRGBA(file, mat.vmInfo.specular)
+    WriteRGBA(file, mat.vmInfo.emissive)
+    WriteFloat(file, mat.vmInfo.shininess)
+    WriteFloat(file, mat.vmInfo.opacity)
+    WriteFloat(file, mat.vmInfo.translucency)
+	
+    if len(mat.vmArgs0) > 0:
+        WriteLong(file, 46) #chunktype
+        WriteLong(file, len(mat.vmArgs0) + 1) #chunksize 
+        WriteString(file, mat.vmArgs0)
+    
+    if len(mat.vmArgs1) > 0:
+        WriteLong(file, 47) #chunktype
+        WriteLong(file, len(mat.vmArgs1) + 1) #chunksize 
+        WriteString(file, mat.vmArgs1)
+
+def WriteMeshMaterialArray(file, size, materials):
+    WriteLong(file, 43) #chunktype
+    WriteLong(file, size) #chunksize
+
+    for mat in materials:
+        WriteMaterial(file, mat)
+		
+def WriteMeshMaterialSetInfo (file, size, matSetInfo):
+    WriteLong(file, 40) #chunktype
+    WriteLong(file, size) #chunksize
+	
+    WriteLong(file, matSetInfo.passCount)
+    WriteLong(file, matSetInfo.vertMatlCount)
+    WriteLong(file, matSetInfo.shaderCount)
+    WriteLong(file, matSetInfo.textureCount)
+	
+#######################################################################################
 # Vertices
 #######################################################################################
 
@@ -268,46 +378,7 @@ def WriteMeshFaceArray(file, size, faces):
         WriteLong(file, face.attrs)
         WriteVector(file, face.normal)
         WriteFloat(file, face.distance)
-		
-#######################################################################################
-# Materials
-#######################################################################################	
-
-def WriteW3DMaterial(file, mat):
-    WriteLong(file, 44) #chunktype
-    WriteLong(file, len(mat.vmName)+1) #chunksize  #has to be size of the string plus binary 0
 	
-    WriteString(file, mat.vmName)
-	
-    WriteLong(file, 45) #chunktype
-    WriteLong(file, 32) #chunksize 
-	
-    WriteLong(file, mat.vmInfo.attributes)
-    WriteRGBA(file, mat.vmInfo.ambient)
-    WriteRGBA(file, mat.vmInfo.diffuse)
-    WriteRGBA(file, mat.vmInfo.specular)
-    WriteRGBA(file, mat.vmInfo.emissive)
-    WriteFloat(file, mat.vmInfo.shininess)
-    WriteFloat(file, mat.vmInfo.opacity)
-    WriteFloat(file, mat.vmInfo.translucency)
-	
-    if len(mat.vmArgs0) > 0:
-        WriteLong(file, 46) #chunktype
-        WriteLong(file, len(mat.vmArgs0)+1) #chunksize 
-        WriteString(file, mat.vmArgs0)
-    
-    if len(mat.vmArgs1) > 0:
-        WriteLong(file, 47) #chunktype
-        WriteLong(file, len(mat.vmArgs1)+1) #chunksize 
-        WriteString(file, mat.vmArgs1)
-
-def WriteMeshMaterialArray(file, size, matls):
-    WriteLong(file, 43) #chunktype
-    WriteLong(file, size) #chunksize
-
-    for mat in matls:
-        WriteW3DMaterial(file, mat)
- 	
 #######################################################################################
 # Mesh
 #######################################################################################	
@@ -335,6 +406,7 @@ def WriteMeshHeader(file, size, header):
     WriteFloat(file, header.sphRadius) 
 	
 def WriteMesh(file, mesh):
+    print("### NEW MESH: ###")
     WriteLong(file, 0) #chunktype
 	
     headerSize = 116
@@ -342,12 +414,28 @@ def WriteMesh(file, mesh):
     normSize = len(mesh.normals)*12
     faceSize = len(mesh.faces)*32
     infSize = len(mesh.vertInfs)*8
-    matSize =  HEAD + len(mesh.vertMatls[0].vmName) + 1 + HEAD + 34 + HEAD + len(mesh.vertMatls[0].vmArgs0) + 1 + HEAD + len(mesh.vertMatls[0].vmArgs1) + 1
+    matSetInfoSize = 16
+    matArraySize = 0
 	
-    size = HEAD + headerSize + HEAD + vertSize + HEAD + normSize + HEAD + faceSize + HEAD + infSize + HEAD + matSize
+    for mat in mesh.vertMatls: 
+        print(mat.vmName)
+        matArraySize += HEAD + len(mat.vmName) + 1 + HEAD + 32
+        if len(mat.vmArgs0) > 0:
+            matArraySize += HEAD + len(mat.vmArgs0) + 1
+        if len(mat.vmArgs1) > 0:
+            matArraySize += HEAD + len(mat.vmArgs1) + 1
+			
+    textureArraySize = 0
+    for tex in mesh.textures:
+        textureArraySize += HEAD + len(texture.name) + 1 + HEAD + 12
+     
+    materialPassSize = HEAD + len(mesh.matlPass.vmIds) * 4 + HEAD + len(matlPass.shaderIds) * 4
+	
+	#size of the mesh chunk
+    size = HEAD + headerSize + HEAD + vertSize + HEAD + normSize + HEAD + faceSize + HEAD + infSize + HEAD + matSetInfoSize + HEAD + matArraySize + HEAD + textureArraySize
+    
     WriteLong(file, size) #chunksize
 	
-    print("### NEW MESH: ###")
     WriteMeshHeader(file, headerSize, mesh.header)
     print("Header")
     WriteMeshVerticesArray(file, vertSize, mesh.verts)
@@ -358,8 +446,14 @@ def WriteMesh(file, mesh):
     print("Faces")
     WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
     print("Vertex Influences")
-    WriteMeshMaterialArray(file, matSize, mesh.vertMatls)
+    WriteMeshMaterialArray(file, matArraySize, mesh.vertMatls)
     print("Materials")
+    WriteMeshMaterialSetInfo(file, matSetInfoSize, mesh.matInfo)
+    print("MaterialSetInfo")
+    WriteTextureArray(file, textureArraySize, mesh.textures)
+    print("Textures")
+    WriteMeshMaterialPass(file, materialPassSize, mesh.matlPass)
+    print("MaterialPass")
 	
 #######################################################################################
 # SKN file
@@ -432,6 +526,7 @@ def WriteSknFile(file, context):
                     print("Error: max 2 bone influences per vertex supported!")
                 Mesh.vertInfs.append(vertInf)
 				
+            Mesh.vertMatls = [] #don´t know exactly why this is needed here, should be empty by default 
             for mat in mesh.materials:
                 meshMaterial = struct_w3d.MeshMaterial()
                 
@@ -440,15 +535,9 @@ def WriteSknFile(file, context):
 				
                 meshMaterial.vmInfo = meshVMInfo
                 Mesh.vertMatls.append(meshMaterial)
-
+				
             Mesh.header = Header			
             WriteMesh(file, Mesh)
-			
-    HLod = struct_w3d.HLod()
-    WriteHLod(file, HLod)
-
-    Hierarchy = struct_w3d.Hierarchy()
-    WriteHierarchy(file, Hierarchy)
 
 #######################################################################################
 # Main Export
@@ -463,5 +552,11 @@ def MainExport(givenfilepath, self, context):
     sknFile = open(givenfilepath,"wb")
 	
     WriteSknFile(sknFile, context) 
+	
+    HLod = struct_w3d.HLod()
+    WriteHLod(sknFile, HLod)
+
+    Hierarchy = struct_w3d.Hierarchy()
+    WriteHierarchy(sknFile, Hierarchy)
 	
     sknFile.close()
