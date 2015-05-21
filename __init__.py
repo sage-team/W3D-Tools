@@ -81,8 +81,7 @@ class ExportW3D(bpy.types.Operator, ImportHelper):
         from . import export_w3d
         print('Exporting file', self.filepath)
         t = time.mktime(datetime.datetime.now().timetuple())
-        with open(self.filepath, 'wb') as file:
-            export_w3d.MainExport(self.filepath, context, self)
+        export_w3d.MainExport(self.filepath, context, self)
         t = time.mktime(datetime.datetime.now().timetuple()) - t
         print('Finished exporting in', t, 'seconds')
         return {'FINISHED'}

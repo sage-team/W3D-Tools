@@ -89,13 +89,13 @@ class CompressedAnimationHeader(Struct):
 	
 class HLodHeader(Struct):
     version = Version()
-    lodCount = 0
+    lodCount = 1
     modelName = ""
     HTreeName = ""
 	
 class HLodArrayHeader(Struct):
     modelCount = 0
-    maxScreenSize = 0.0
+    maxScreenSize = 333333333330000000000000000.0 #just a default value
 
 class HLodSubObject(Struct):
     name = ""

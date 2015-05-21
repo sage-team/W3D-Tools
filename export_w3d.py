@@ -14,6 +14,8 @@ from . import struct_w3d
 
 #TODO 
 
+#make skn file always end with _skn
+
 #recalculate size of vertex material chunk
 
 #support for 2 bone vertex influences
@@ -141,10 +143,10 @@ def WriteHierarchy(file, hierarchy):
     WriteLong(file, 256) #chunktype
     
     headerSize = 36
-    pivotsSize = len(hierarchy.pivots)*60
-    pivotFixupsSize = len(hierarchy.pivot_fixups)*12
-    size = HEAD + headerSize + HEAD + pivotsSize + HEAD + pivotFixupsSize 
-	
+    pivotsSize = len(hierarchy.pivots) * 60
+    pivotFixupsSize = len(hierarchy.pivot_fixups) * 12
+    size = HEAD + headerSize + HEAD + pivotsSize #+ HEAD + pivotFixupsSize 
+
     WriteLong(file, size) #chunksize
 	
     print("### NEW HIERARCHY: ###")
@@ -152,8 +154,9 @@ def WriteHierarchy(file, hierarchy):
     print("Header")
     WritePivots(file, pivotsSize, hierarchy.pivots)
     print("Pivots")
-    WritePivotFixups(file, pivotFixupsSize, hierarchy.pivot_fixups)
-    print("Pivot Fixups")
+    #if pivotFixupsSize > 0:
+    #    WritePivotFixups(file, pivotFixupsSize, hierarchy.pivot_fixups)
+    #    print("Pivot Fixups")
 	
 #######################################################################################
 # HLod
@@ -266,10 +269,10 @@ def WriteMeshTextureStage(file, size, textureStage):
     WriteLong(file, size) #chunksize 
 	
     WriteLong(file, 73) #chunktype
-    WriteLong(file, len(textureStage.textureIDs) * 4) #chunksize 
-    WriteLongArray(file, textureStage.textureIDs)
+    WriteLong(file, len(textureStage.txIds) * 4) #chunksize 
+    WriteLongArray(file, textureStage.txIds)
 	
-    WriteMeshTextureCoordArray(file, size, textureStage.texCoords)
+    WriteMeshTextureCoordArray(file, size, textureStage.txCoords)
 
 def WriteMeshMaterialPass(file, size, matlPass):
     WriteLong(file, 56) #chunktype
@@ -349,8 +352,8 @@ def WriteMeshVertexInfluences(file, size, influences):
     for inf in influences:
         WriteShort(file, inf.boneIdx)
         WriteShort(file, inf.xtraIdx)
-        WriteShort(file, int(inf.boneInf))
-        WriteShort(file, int(inf.xtraInf))		
+        WriteShort(file, int(inf.boneInf * 100))
+        WriteShort(file, int(inf.xtraInf * 100))		
 
 #######################################################################################
 # Normals
@@ -388,7 +391,7 @@ def WriteMeshHeader(file, size, header):
     WriteLong(file, size) #chunksize
 	
     WriteLong(file, MakeVersion(header.version)) 
-    WriteFloat(file, header.attrs) 
+    WriteLong(file, header.attrs) 
     WriteFixedString(file, header.meshName)
     WriteFixedString(file, header.containerName)
     WriteLong(file, header.faceCount) 
@@ -429,10 +432,10 @@ def WriteMesh(file, mesh):
     for tex in mesh.textures:
         textureArraySize += HEAD + len(texture.name) + 1 + HEAD + 12
      
-    materialPassSize = HEAD + len(mesh.matlPass.vmIds) * 4 + HEAD + len(matlPass.shaderIds) * 4
+    materialPassSize = HEAD + len(mesh.matlPass.vmIds) * 4 + HEAD + len(mesh.matlPass.shaderIds) * 4
 	
 	#size of the mesh chunk
-    size = HEAD + headerSize + HEAD + vertSize + HEAD + normSize + HEAD + faceSize + HEAD + infSize + HEAD + matSetInfoSize + HEAD + matArraySize + HEAD + textureArraySize
+    size = HEAD + headerSize + HEAD + vertSize + HEAD + normSize + HEAD + faceSize + HEAD + infSize #+ HEAD + matSetInfoSize + HEAD + matArraySize + HEAD + textureArraySize
     
     WriteLong(file, size) #chunksize
 	
@@ -446,23 +449,64 @@ def WriteMesh(file, mesh):
     print("Faces")
     WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
     print("Vertex Influences")
-    WriteMeshMaterialArray(file, matArraySize, mesh.vertMatls)
-    print("Materials")
-    WriteMeshMaterialSetInfo(file, matSetInfoSize, mesh.matInfo)
-    print("MaterialSetInfo")
-    WriteTextureArray(file, textureArraySize, mesh.textures)
-    print("Textures")
-    WriteMeshMaterialPass(file, materialPassSize, mesh.matlPass)
-    print("MaterialPass")
+    #WriteMeshMaterialArray(file, matArraySize, mesh.vertMatls)
+    #print("Materials")
+    #WriteMeshMaterialSetInfo(file, matSetInfoSize, mesh.matInfo)
+    #print("MaterialSetInfo")
+    #WriteTextureArray(file, textureArraySize, mesh.textures)
+    #print("Textures")
+    #WriteMeshMaterialPass(file, materialPassSize, mesh.matlPass)
+    #print("MaterialPass")
 	
 #######################################################################################
-# SKN file
+# Main Export
 #######################################################################################	
 
-def WriteSknFile(file, context):
+def MainExport(givenfilepath, self, context):
+    print("Run Export")
+    HLod = struct_w3d.HLod()
+	
+    Hierarchy = struct_w3d.Hierarchy()
+	
+    roottransform = struct_w3d.HierarchyPivot()
+    roottransform.name = "ROOTTRANSFORM"
+    roottransform.parentID = -1
+    roottransform.position = Vector((0.0, 0.0 ,0.0))
+    roottransform.eulerAngles = Vector((0.0, 0.0 ,0.0))
+    roottransform.rotation = Quaternion((1.0, 0.0, 0.0, 0.0))
+    Hierarchy.pivots.append(roottransform)
+    
+	#switch to object mode
+    if bpy.ops.object.mode_set.poll():
+        bpy.ops.object.mode_set(mode='OBJECT')
+		
+    #make sure the skin file ends with _skn.w3d
+    if not givenfilepath.endswith("_skn.w3d"):
+        print("change")
+        givenfilepath = givenfilepath.replace(".w3d", "_skn.w3d")
+    sknFile = open(givenfilepath, "wb")
+	
+    # Get all the armatures in the scene.
+    sklName = ""
+    rigList = [object for object in bpy.context.scene.objects if object.type == 'ARMATURE']
+    if len(rigList) > 0:
+        sklFile = open(givenfilepath.replace("skn", "skl"),"wb")
+        sklName = (os.path.splitext(os.path.basename(sklFile.name))[0]).upper()
+    for rig in rigList:
+        for bone in rig.pose.bones:
+             pivot = struct_w3d.HierarchyPivot()
+             pivot.name = bone.name
+             if not bone.parent == None:
+                 ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == bone.parent.name] #return an array of indices (in this case only one value)
+                 pivot.parentID = ids[0]
+             pivot.position = bone.location
+             pivot.eulerAngles = bone.rotation_euler
+             pivot.rotation = bone.rotation_quaternion
+             Hierarchy.pivots.append(pivot)		
+	
     # Get all the mesh objects in the scene.
     objList = [object for object in bpy.context.scene.objects if object.type == 'MESH']
-    containerName = (os.path.splitext(os.path.basename(file.name))[0]).upper()
+    containerName = (os.path.splitext(os.path.basename(sknFile.name))[0]).upper()
     for mesh_ob in objList:
         if mesh_ob.name == "BOUNDINGBOX":
             Box = struct_w3d.Box()
@@ -473,10 +517,10 @@ def WriteSknFile(file, context):
             #get box extend
             #Box.extend = 
 			
-            WriteBox(file, Box)
+            WriteBox(sknFile, Box)
         else:
             Mesh = struct_w3d.Mesh()
-            Header = struct_w3d.MeshHeader()
+            Header = struct_w3d.MeshHeader()				
 		
             verts = []
             normals = [] 
@@ -516,15 +560,27 @@ def WriteSknFile(file, context):
             for v in mesh.vertices:
                 vertInf = struct_w3d.MeshVertexInfluences()
                 if len(v.groups) > 0:
-                    vertInf.boneIdx = v.groups[0].group
-                    vertInf.boneInf = v.groups[0].weight * 100
-                if len(v.groups) > 1:
-                    vertInf.xtraIdx = v.groups[1].group
-                    vertInf.xtraInf = v.groups[1].weight * 100
-                if len(v.groups) > 2: 
+				    #has to be this complicated, otherwise the vertex groups would be corrupted
+                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[0].group].name] #return an array of indices (in this case only one value)
+                    if len(ids) > 0:
+                        vertInf.boneIdx = ids[0]
+                    vertInf.boneInf = v.groups[0].weight
+                    Mesh.vertInfs.append(vertInf)
+                elif len(v.groups) > 1:
+                    #has to be this complicated, otherwise the vertex groups would be corrupted
+                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[0].group].name] #return an array of indices (in this case only one value)
+                    if len(ids) > 0:
+                        vertInf.boneIdx = ids[0]
+                    vertInf.boneInf = v.groups[0].weight
+                    #has to be this complicated, otherwise the vertex groups would be corrupted
+                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[1].group].name] #return an array of indices (in this case only one value)
+                    if len(ids) > 0:
+                        vertInf.boneIdx = ids[0]
+                    vertInf.xtraInf = v.groups[1].weight
+                    Mesh.vertInfs.append(vertInf)
+                elif len(v.groups) > 2: 
                     context.report({'ERROR'}, "max 2 bone influences per vertex supported!")
                     print("Error: max 2 bone influences per vertex supported!")
-                Mesh.vertInfs.append(vertInf)
 				
             Mesh.vertMatls = [] #don´t know exactly why this is needed here, should be empty by default 
             for mat in mesh.materials:
@@ -537,26 +593,47 @@ def WriteSknFile(file, context):
                 Mesh.vertMatls.append(meshMaterial)
 				
             Mesh.header = Header			
-            WriteMesh(file, Mesh)
+            WriteMesh(sknFile, Mesh)
+			
+            if len(mesh_ob.vertex_groups) > 0:
+                Header.attrs = 131072 #type skin
+            else:
+                Header.attrs = 0 # type normal mesh
+				
+                pivot = struct_w3d.HierarchyPivot()
+                pivot.name = mesh_ob.name
+                pivot.parentID = 0
+                if not mesh_ob.parent_bone == "":
+                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.parent_bone] #return an array of indices (in this case only one value)
+                    pivot.parentID = ids[0]
+                pivot.position = mesh_ob.location
+                pivot.eulerAngles = mesh_ob.rotation_euler
+                pivot.rotation = mesh_ob.rotation_quaternion
+                Hierarchy.pivots.append(pivot)		
+			
+        #HLod stuff
+        subObject = struct_w3d.HLodSubObject()
+        subObject.name = containerName + "." + mesh_ob.name
+        subObject.boneIndex = 0
+        ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.name] #return an array of indices (in this case only one value)
+        if len(ids) > 0:
+	        subObject.boneIndex = ids[0]
+        HLod.lodArray.subObjects.append(subObject)
 
-#######################################################################################
-# Main Export
-#######################################################################################	
-
-def MainExport(givenfilepath, self, context):
-    print("Run Export")
+    Hierarchy.header.pivotCount = len(Hierarchy.pivots)
+    if not sklName == "":
+        Hierarchy.header.name = sklName
+        WriteHierarchy(sklFile, Hierarchy)
+        HLod.header.HTreeName = sklName
+        sklFile.close()
+    else:
+        Hierarchy.header.name = containerName	  
+        WriteHierarchy(sknFile, Hierarchy)
+        HLod.header.HTreeName = containerName
 	
-	#switch to object mode
-    if bpy.ops.object.mode_set.poll():
-        bpy.ops.object.mode_set(mode='OBJECT')
-    sknFile = open(givenfilepath,"wb")
-	
-    WriteSknFile(sknFile, context) 
-	
-    HLod = struct_w3d.HLod()
+    #test if we want to export a skeleton file
+    HLod.lodArray.header.modelCount = len(HLod.lodArray.subObjects)
+    HLod.header.modelName = containerName
     WriteHLod(sknFile, HLod)
-
-    Hierarchy = struct_w3d.Hierarchy()
-    WriteHierarchy(sknFile, Hierarchy)
 	
     sknFile.close()
