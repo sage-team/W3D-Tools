@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 18.05.2015
+#Last Modification 28.05.2015
 #Exports the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -14,12 +14,9 @@ from . import struct_w3d
 
 #TODO 
 
-#make skn file always end with _skn
+# dont write data that is not needed / empty chunks (e.g. vertex influences)
 
-#recalculate size of vertex material chunk
-
-#support for 2 bone vertex influences
-
+# export animation data (when import works)
 
 HEAD = 8 #4(long = chunktype) + 4 (long = chunksize)
 
@@ -154,6 +151,7 @@ def WriteHierarchy(file, hierarchy):
     print("Header")
     WritePivots(file, pivotsSize, hierarchy.pivots)
     print("Pivots")
+	# still dont know what pivotFixups are for and what they are
     #if pivotFixupsSize > 0:
     #    WritePivotFixups(file, pivotFixupsSize, hierarchy.pivot_fixups)
     #    print("Pivot Fixups")
@@ -229,22 +227,23 @@ def WriteBox(file, box):
 # Texture
 #######################################################################################	
 	
-def WriteTexture(file, size, texture):
+def WriteTexture(file, texture):
+    print(texture.name)
     WriteLong(file, 49) #chunktype
-    WriteLong(file, HEAD + len(texture.name) + 1 + HEAD + 12) #chunksize 
+    WriteLong(file, HEAD + len(texture.name) + 1) # + HEAD + 12) #chunksize 
 	
     WriteLong(file, 50) #chunktype
     WriteLong(file, len(texture.name) + 1) #chunksize 
     
     WriteString(file, texture.name)
 	
-    WriteLong(file, 51) #chunktype
-    WriteLong(file, 12) #chunksize 
+    #WriteLong(file, 51) #chunktype
+    #WriteLong(file, 12) #chunksize 
 	
-    WriteShort(file, texture.textureInfo.attributes)
-    WriteShort(file, texture.textureInfo.animType)
-    WriteLong(file, texture.textureInfo.frameCount)
-    WriteFloat(file, texture.textureInfo.frameRate)
+    #WriteShort(file, texture.textureInfo.attributes)
+    #WriteShort(file, texture.textureInfo.animType)
+    #WriteLong(file, texture.textureInfo.frameCount)
+    #WriteFloat(file, texture.textureInfo.frameRate)
 
 def WriteTextureArray(file, size, textures):
     WriteLong(file, 48) #chunktype
@@ -257,13 +256,6 @@ def WriteTextureArray(file, size, textures):
 # Material
 #######################################################################################	
 
-def WriteMeshTextureCoordArray(file, size, texCoords):
-    WriteLong(file, 74) #chunktype
-    WriteLong(file, size) #chunksize 
-    for coord in texCoords:
-        WriteFloat(file, coord[0])
-        WriteFloat(file, coord[1])
-
 def WriteMeshTextureStage(file, size, textureStage):
     WriteLong(file, 72) #chunktype
     WriteLong(file, size) #chunksize 
@@ -272,7 +264,11 @@ def WriteMeshTextureStage(file, size, textureStage):
     WriteLong(file, len(textureStage.txIds) * 4) #chunksize 
     WriteLongArray(file, textureStage.txIds)
 	
-    WriteMeshTextureCoordArray(file, size, textureStage.txCoords)
+    WriteLong(file, 74) #chunktype
+    WriteLong(file, len(textureStage.txCoords) * 8) #chunksize 
+    for coord in textureStage.txCoords:
+        WriteFloat(file, coord[0])
+        WriteFloat(file, coord[1])
 
 def WriteMeshMaterialPass(file, size, matlPass):
     WriteLong(file, 56) #chunktype
@@ -288,7 +284,7 @@ def WriteMeshMaterialPass(file, size, matlPass):
 	
     WriteLongArray(file, matlPass.shaderIds)
 	
-    WriteMeshTextureStage(file, size, matlPass.txStage)
+    WriteMeshTextureStage(file, HEAD + len(matlPass.txStage.txIds) * 4 + HEAD + len(matlPass.txStage.txCoords) * 8, matlPass.txStage)
 
 def WriteMaterial(file, mat):
     WriteLong(file, 44) #chunktype
@@ -319,8 +315,11 @@ def WriteMaterial(file, mat):
         WriteString(file, mat.vmArgs1)
 
 def WriteMeshMaterialArray(file, size, materials):
-    WriteLong(file, 43) #chunktype
+    WriteLong(file, 42) #chunktype
     WriteLong(file, size) #chunksize
+	
+    WriteLong(file, 43) #chunktype
+    WriteLong(file, size - HEAD) #chunksize
 
     for mat in materials:
         WriteMaterial(file, mat)
@@ -375,9 +374,9 @@ def WriteMeshFaceArray(file, size, faces):
     WriteLong(file, size) #chunksize
 	
     for face in faces:
-        WriteLong(file, face.vertIDs[0])
-        WriteLong(file, face.vertIDs[1])
-        WriteLong(file, face.vertIDs[2])
+        WriteLong(file, face.vertIds[0])
+        WriteLong(file, face.vertIds[1])
+        WriteLong(file, face.vertIds[2])
         WriteLong(file, face.attrs)
         WriteVector(file, face.normal)
         WriteFloat(file, face.distance)
@@ -418,24 +417,24 @@ def WriteMesh(file, mesh):
     faceSize = len(mesh.faces)*32
     infSize = len(mesh.vertInfs)*8
     matSetInfoSize = 16
-    matArraySize = 0
-	
+    matArraySize = HEAD
+    textureArraySize = HEAD
+
     for mat in mesh.vertMatls: 
-        print(mat.vmName)
         matArraySize += HEAD + len(mat.vmName) + 1 + HEAD + 32
         if len(mat.vmArgs0) > 0:
             matArraySize += HEAD + len(mat.vmArgs0) + 1
         if len(mat.vmArgs1) > 0:
             matArraySize += HEAD + len(mat.vmArgs1) + 1
 			
-    textureArraySize = 0
-    for tex in mesh.textures:
-        textureArraySize += HEAD + len(texture.name) + 1 + HEAD + 12
+        for tex in bpy.data.materials[mesh.header.meshName + "." + mat.vmName].texture_slots:
+            if not (tex == None):
+                textureArraySize += HEAD + len(tex.name) + 1 #+ HEAD + 12
      
-    materialPassSize = HEAD + len(mesh.matlPass.vmIds) * 4 + HEAD + len(mesh.matlPass.shaderIds) * 4
+    materialPassSize = HEAD + len(mesh.matlPass.vmIds) * 4 + HEAD + len(mesh.matlPass.shaderIds) * 4 + HEAD + HEAD + len(mesh.matlPass.txStage.txIds) * 4 + HEAD + len(mesh.matlPass.txStage.txCoords) * 8
 	
 	#size of the mesh chunk
-    size = HEAD + headerSize + HEAD + vertSize + HEAD + normSize + HEAD + faceSize + HEAD + infSize #+ HEAD + matSetInfoSize + HEAD + matArraySize + HEAD + textureArraySize
+    size = HEAD + headerSize + HEAD + vertSize + HEAD + normSize + HEAD + faceSize + HEAD + infSize + HEAD + matSetInfoSize + HEAD + matArraySize + HEAD + textureArraySize + HEAD + materialPassSize
     
     WriteLong(file, size) #chunksize
 	
@@ -449,14 +448,17 @@ def WriteMesh(file, mesh):
     print("Faces")
     WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
     print("Vertex Influences")
-    #WriteMeshMaterialArray(file, matArraySize, mesh.vertMatls)
-    #print("Materials")
-    #WriteMeshMaterialSetInfo(file, matSetInfoSize, mesh.matInfo)
-    #print("MaterialSetInfo")
-    #WriteTextureArray(file, textureArraySize, mesh.textures)
-    #print("Textures")
-    #WriteMeshMaterialPass(file, materialPassSize, mesh.matlPass)
-    #print("MaterialPass")
+    WriteMeshMaterialSetInfo(file, matSetInfoSize, mesh.matInfo)
+    print("MaterialSetInfo")
+    WriteMeshMaterialArray(file, matArraySize, mesh.vertMatls)
+    print("Materials")
+    WriteTextureArray(file, textureArraySize, mesh.textures)
+    print("Textures")
+	
+	#not working yet properly
+	
+    WriteMeshMaterialPass(file, materialPassSize, mesh.matlPass)
+    print("MaterialPass")
 	
 #######################################################################################
 # Main Export
@@ -470,10 +472,6 @@ def MainExport(givenfilepath, self, context):
 	
     roottransform = struct_w3d.HierarchyPivot()
     roottransform.name = "ROOTTRANSFORM"
-    roottransform.parentID = -1
-    roottransform.position = Vector((0.0, 0.0 ,0.0))
-    roottransform.eulerAngles = Vector((0.0, 0.0 ,0.0))
-    roottransform.rotation = Quaternion((1.0, 0.0, 0.0, 0.0))
     Hierarchy.pivots.append(roottransform)
     
 	#switch to object mode
@@ -482,7 +480,6 @@ def MainExport(givenfilepath, self, context):
 		
     #make sure the skin file ends with _skn.w3d
     if not givenfilepath.endswith("_skn.w3d"):
-        print("change")
         givenfilepath = givenfilepath.replace(".w3d", "_skn.w3d")
     sknFile = open(givenfilepath, "wb")
 	
@@ -510,17 +507,15 @@ def MainExport(givenfilepath, self, context):
     for mesh_ob in objList:
         if mesh_ob.name == "BOUNDINGBOX":
             Box = struct_w3d.Box()
-            ### Box.attributes = 0  ???
             Box.name = containerName + "." + mesh_ob.name
-            ### Box.color = TODO
             Box.center = mesh_ob.location
-            #get box extend
-            #Box.extend = 
+            box_mesh = mesh_ob.to_mesh(bpy.context.scene, False, 'PREVIEW', calc_tessface = True)
+            Box.extend = Vector((box_mesh.vertices[0].co.x * 2, box_mesh.vertices[0].co.y * 2, box_mesh.vertices[0].co.z))
 			
             WriteBox(sknFile, Box)
         else:
             Mesh = struct_w3d.Mesh()
-            Header = struct_w3d.MeshHeader()				
+            Header = struct_w3d.MeshHeader()			
 		
             verts = []
             normals = [] 
@@ -539,20 +534,41 @@ def MainExport(givenfilepath, self, context):
                 verts.append(vert.co.xyz)
             Mesh.verts = verts
 		
+            Mesh.matlPass.txStage.txCoords = []
             for vert in mesh.vertices:
                 normals.append(vert.normal)
+                Mesh.matlPass.txStage.txCoords.append((0.0, 0.0)) #just to fill the array 
             Mesh.normals = normals
 
             for face in mesh.polygons:
                 triangle = struct_w3d.MeshFace()
-                triangle.vertIDs = [face.vertices[0], face.vertices[1], face.vertices[2]]
-                ### triangle.attrs = ??
+                triangle.vertIds = [face.vertices[0], face.vertices[1], face.vertices[2]]
                 triangle.normal = face.normal
-                ### triangle.distance = ?? 
                 faces.append(triangle)
             Mesh.faces = faces
 			
             Header.faceCount = len(faces)
+			
+		    #uv coords
+            bm = bmesh.new()
+            bm.from_mesh(mesh)
+
+            uv_layer = bm.loops.layers.uv.verify()
+            #bm.faces.layers.tex.verify()
+			
+            index = 0
+            for f in bm.faces:
+                Mesh.matlPass.txStage.txCoords[Mesh.faces[index].vertIds[0]] = f.loops[0][uv_layer].uv
+                Mesh.matlPass.txStage.txCoords[Mesh.faces[index].vertIds[1]] = f.loops[1][uv_layer].uv
+                Mesh.matlPass.txStage.txCoords[Mesh.faces[index].vertIds[2]] = f.loops[2][uv_layer].uv
+                index+=1
+						
+            Mesh.matlPass.vmIds = []
+            Mesh.matlPass.shaderIds = []
+            Mesh.matlPass.txStage.txIds = []
+            Mesh.matlPass.vmIds.append(0)
+            Mesh.matlPass.shaderIds.append(0)
+            Mesh.matlPass.txStage.txIds.append(0)
 			
 			#vertex influences
             group_lookup = {g.index: g.name for g in mesh_ob.vertex_groups}
@@ -582,7 +598,8 @@ def MainExport(givenfilepath, self, context):
                     context.report({'ERROR'}, "max 2 bone influences per vertex supported!")
                     print("Error: max 2 bone influences per vertex supported!")
 				
-            Mesh.vertMatls = [] #don´t know exactly why this is needed here, should be empty by default 
+            Mesh.vertMatls = [] 
+            Mesh.textures = [] 
             for mat in mesh.materials:
                 meshMaterial = struct_w3d.MeshMaterial()
                 
@@ -591,14 +608,20 @@ def MainExport(givenfilepath, self, context):
 				
                 meshMaterial.vmInfo = meshVMInfo
                 Mesh.vertMatls.append(meshMaterial)
-				
-            Mesh.header = Header			
-            WriteMesh(sknFile, Mesh)
 			
-            if len(mesh_ob.vertex_groups) > 0:
+                for tex in bpy.data.materials[mesh_ob.name + "." + meshMaterial.vmName].texture_slots:
+                    if not (tex == None):
+                        #if not "_NRM" in tex.name:
+                        texture = struct_w3d.Texture()
+                        texture.name = tex.name
+                        Mesh.textures.append(texture)
+
+            Header.matlCount = len(Mesh.vertMatls)
+			
+            if len(mesh_ob.vertex_groups) > 0:		 
                 Header.attrs = 131072 #type skin
             else:
-                Header.attrs = 0 # type normal mesh
+                Header.attrs = 0 #type normal mesh
 				
                 pivot = struct_w3d.HierarchyPivot()
                 pivot.name = mesh_ob.name
@@ -609,7 +632,10 @@ def MainExport(givenfilepath, self, context):
                 pivot.position = mesh_ob.location
                 pivot.eulerAngles = mesh_ob.rotation_euler
                 pivot.rotation = mesh_ob.rotation_quaternion
-                Hierarchy.pivots.append(pivot)		
+                Hierarchy.pivots.append(pivot)	
+			
+            Mesh.header = Header			
+            WriteMesh(sknFile, Mesh)
 			
         #HLod stuff
         subObject = struct_w3d.HLodSubObject()

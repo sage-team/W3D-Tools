@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 18.05.2015
+#Last Modification 28.05.2015
 #Loads the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -14,17 +14,18 @@ from . import struct_w3d
 
 #TODO 
 
-#proper creation of materials (color etc)
+#textures are still created multiple times (e.g. texture.tga.001 etc)
 
 #support for multiple textures for one mesh (also multiple uv maps)
 
 #correct insertion of key frames
 
-#correctly apply normal map
-
 #load and create animation data
 
 #support for 2 bone vertex influences (are they even used?)
+
+#chunk 59 RGBA structs but what for
+#chunk 64 size 4 dont know what this is
 
 #what are chunks 96 97 for? (two additional vertex normals for bump mapping?) seems to be diffuse normals and specular normals
 #but it seems blender does not support that kind of stuff
@@ -373,7 +374,7 @@ def ReadTextureArray(file, self, chunkEnd):
 def ReadMeshTextureCoordArray(file, chunkEnd):
     txCoords = []
     while file.tell() < chunkEnd:
-        txCoords.append((ReadFloat(file),ReadFloat(file)))
+        txCoords.append((ReadFloat(file), ReadFloat(file)))
     return txCoords
 
 def ReadMeshTextureStage(file, self, chunkEnd):
@@ -802,6 +803,7 @@ def ReadMesh(self, file, chunkEnd):
             try:
                 MeshMaterialPass = ReadMeshMaterialPass(file, self, subChunkEnd)
                 print("MatPass")
+                print(Chunksize)
             except:
                 self.report({'ERROR'}, "Mistake while reading MeshMaterialPass (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading MeshMaterialPass (Mesh) Byte:%s" % file.tell())
@@ -867,6 +869,10 @@ def createBox(Box):
 
     cube = bpy.data.meshes.new(name)
     box = bpy.data.objects.new(name, cube)
+    mat = bpy.data.materials.new("BOUNDINGBOX.Material")
+    mat.use_shadeless = True
+    mat.diffuse_color = (struct.unpack('B', Box.color.r)[0], struct.unpack('B', Box.color.g)[0], struct.unpack('B', Box.color.b)[0])
+    cube.materials.append(mat)
     box.location = Box.center
     bpy.context.scene.objects.link(box)
     cube.from_pydata(verts, [], faces)
@@ -1006,7 +1012,6 @@ def createArmature(Hierarchy, amtName):
 # Main Import
 #######################################################################################	
 
-    #reads the file and get chunks and does all the other stuff
 def MainImport(givenfilepath, context, self):
     file = open(givenfilepath,"rb")
     file.seek(0,2)
@@ -1126,14 +1131,10 @@ def MainImport(givenfilepath, context, self):
         for vm in m.vertMatls:
             mat = bpy.data.materials.new(m.header.meshName + "." + vm.vmName)
             mat.use_shadeless = True
-            #mat.specular_color = (float(vm.vmInfo.specular.r), float(vm.vmInfo.specular.g), float(vm.vmInfo.specular.b));
-            #mat.diffuse_color = (float(vm.vmInfo.diffuse.r), float(vm.vmInfo.diffuse.g), float(vm.vmInfo.diffuse.b));
-            #print(mat.specular_color)
-            #print(mat.diffuse_color)
-            #mat.specular_intensity = vm.vmInfo.shininess;
-            #mat.diffuse_intensity = vm.vmInfo.opacity;
-            #print(mat.specular_intensity)
-            #print(mat.diffuse_intensity)
+            mat.specular_color = (struct.unpack('B', vm.vmInfo.specular.r)[0], struct.unpack('B', vm.vmInfo.specular.g)[0], struct.unpack('B', vm.vmInfo.specular.b)[0])
+            mat.diffuse_color = (struct.unpack('B', vm.vmInfo.diffuse.r)[0], struct.unpack('B', vm.vmInfo.diffuse.g)[0], struct.unpack('B', vm.vmInfo.diffuse.b)[0])
+            mat.specular_intensity = vm.vmInfo.shininess
+            mat.diffuse_intensity = vm.vmInfo.opacity
             mesh.materials.append(mat)
 			
         for tex in m.textures:

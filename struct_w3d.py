@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 18.05.2015
+#Last Modification 28.05.2015
 #Structs of the W3D Format used in games by Westwood & EA
 from mathutils import Vector, Quaternion
 
@@ -25,7 +25,7 @@ class RGBA(Struct):
     a = 0
 	
 class Version(Struct):
-    major = 0 
+    major = 6 #to identify models exported by this tool (default is 5)
     minor = 0
 	
 #######################################################################################
@@ -40,11 +40,12 @@ class HierarchyHeader(Struct):
 
 class HierarchyPivot(Struct):
     name = ""
-    parentID = 0
+    parentID = -1
     position = Vector((0.0, 0.0 ,0.0))
     eulerAngles = Vector((0.0, 0.0 ,0.0))
-    rotation = Quaternion((0.0, 0.0, 0.0, 0.0))
-    isBone = 1 #additional boolean, not part of the data
+    rotation = Quaternion((1.0, 0.0, 0.0, 0.0))
+	
+    isBone = 1 #additional boolean, not part of the data (needed for the import skript)
 
 class Hierarchy(Struct):
     header = HierarchyHeader()
@@ -166,10 +167,10 @@ class MeshMaterial(Struct):
     vmArgs1 = "" #mapping
 
 class MeshMaterialSetInfo(Struct):
-    passCount = 0
-    vertMatlCount = 0
+    passCount = 1
+    vertMatlCount = 1
     shaderCount = 0
-    textureCount = 0
+    textureCount = 1
 	
 #######################################################################################
 # Vertices
@@ -189,7 +190,7 @@ class MeshFace(Struct):
     vertIds = []
     attrs = 0
     normal = Vector((0.0, 0.0 ,0.0))
-    distance = 0.0
+    distance = 0.0 #what is this for?
 	
 #######################################################################################
 # Shader
@@ -223,9 +224,9 @@ class MeshNormalMapHeader(Struct):
     reserved = 0
 
 class MeshNormalMapEntryStruct(Struct):
-    unknown = 0  #dont know what this is for
+    unknown = 0  #dont know what this is for and what it is called
     diffuseTexName = ""
-    unknown_nrm = 0 #dont know what this is for
+    unknown_nrm = 0 #dont know what this is for and what it is called
     normalMap = ""
     ambientColor = []
     diffuseColor = []
@@ -246,8 +247,8 @@ class AABTreeHeader(Struct):
     polyCount = 0
 	
 class AABTreeNode(Struct):
-    min = Vector((0.0, 0.0 ,0.0))
-    max = Vector((0.0, 0.0 ,0.0))
+    min = Vector((0.0, 0.0, 0.0))
+    max = Vector((0.0, 0.0, 0.0))
     FrontOrPoly0 = 0
     BackOrPolyCount = 0
 
