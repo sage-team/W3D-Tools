@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 28.05.2015
+#Last Modification 02.06.2015
 #Loads the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -152,7 +152,8 @@ def ReadHierarchy(file, self, chunkEnd):
 #######################################################################################
 	
 def ReadAnimationHeader(file, chunkEnd):
-    return struct_w3d.AnimationHeader(version = GetVersion(ReadLong(file)), name = ReadFixedString(file), hieraName = ReadFixedString(file), numFrames = ReadLong(file), frameRate = ReadLong(file))
+    return struct_w3d.AnimationHeader(version = GetVersion(ReadLong(file)), name = ReadFixedString(file), 
+		hieraName = ReadFixedString(file), numFrames = ReadLong(file), frameRate = ReadLong(file))
 
 def ReadAnimationChannel(file, self, chunkEnd):
     FirstFrame = ReadShort(file)
@@ -173,7 +174,8 @@ def ReadAnimationChannel(file, self, chunkEnd):
         print("!!!unsupported vector len %s" % VectorLen)
         while file.tell() < chunkEnd:
             file.read(4)
-    return struct_w3d.AnimationChannel(firstFrame = FirstFrame, lastFrame = LastFrame, vectorLen = VectorLen, type = Type, pivot = Pivot, pad = Pad, data = Data)
+    return struct_w3d.AnimationChannel(firstFrame = FirstFrame, lastFrame = LastFrame, vectorLen = VectorLen, 
+		type = Type, pivot = Pivot, pad = Pad, data = Data)
 	
 def ReadAnimationBitChannel(file, chunkEnd):
     while file.tell() < chunkEnd:
@@ -185,6 +187,7 @@ def ReadAnimationBitChannel(file, chunkEnd):
         print(file.read(8))
 
 def ReadAnimation(file, self, chunkEnd):
+    print("### NEW ANIMATION: ###")
     Header = struct_w3d.AnimationHeader()
     Channels = []
     while file.tell() < chunkEnd:
@@ -205,53 +208,59 @@ def ReadAnimation(file, self, chunkEnd):
     return struct_w3d.Animation(header = Header, channels = Channels)
 			
 def ReadCompressedAnimationHeader(file, chunkEnd):
-    return struct_w3d.CompressedAnimationHeader(version = GetVersion(ReadLong(file)), name = ReadFixedString(file), hieraName = ReadFixedString(file), numFrames = ReadLong(file), frameRate = ReadShort(file), flavor = ReadShort(file))
+    return struct_w3d.CompressedAnimationHeader(version = GetVersion(ReadLong(file)), name = ReadFixedString(file), 
+		hieraName = ReadFixedString(file), numFrames = ReadLong(file), frameRate = ReadShort(file), flavor = ReadShort(file))
 	
 def ReadAnimationTimeCodedChannel(file, chunkEnd):
-    TimeCodesCount = ReadLong(file)       
-    Pivot = ReadShort(file)    
-    VectorLen = ReadUnsignedByte(file)
-    Flag = ReadUnsignedByte(file)  
-    Pivot = ReadShort(file)
     Data = []
-    print(VectorLen)
+    magicNum = ReadShort(file)
+    VectorLen = ReadUnsignedByte(file)
+    Flag = ReadUnsignedByte(file)
+    TimeCodesCount = ReadShort(file)
+    Pivot = ReadShort(file)
+	
+	#size = 8
+
+    print("time coded channel")
     print(Pivot)
+    print(VectorLen)
     if VectorLen == 1:
         while file.tell() < chunkEnd:
-            tCode = ReadLong(file)
+            #tCode = ReadShort(file)
             print(ReadFloat(file))
             #Data.append(ReadFloat(file))
     elif VectorLen == 4:
         while file.tell() < chunkEnd:
-            tCode = ReadLong(file)
-            print(ReadQuaternion(file))
+            #tCode = ReadLong(file)
+            ReadFloat(file)
+            #print(ReadQuaternion(file))
             #Data.append(ReadQuaternion(file))
     else:
         while file.tell() < chunkEnd:
             file.read(4)
 		
 def ReadCompressedAnimation(file, self, chunkEnd):
-    print("### compressed animation")
+    print("### NEW COMPRESSED ANIMATION: ###")
     Header = struct_w3d.CompressedAnimationHeader()
     Channels = []
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
+        print(chunkType)
+        print(chunkSize)
         if chunkType == 641:
             Header = ReadCompressedAnimationHeader(file, subChunkEnd)
             print(Header.hieraName)
-            print(Header.flavor)
         #elif chunkType == 642:
         #    print("##### anim bit channels for compressed animation are not supported yet!")
         #    #Channels.append(ReadAnimationChannel(file, subChunkEnd))
         #elif chunkType == 643:
         #    print("##### anim bit channels not supported yet!")
         #    #ReadAnimationBitChannel(file, subChunkEnd)
-        #elif chunkType == 644:
-        #    print("###anim bfme2 data") 
-        #    print(chunkSize)
-        #    ReadAnimationTimeCodedChannel(file, subChunkEnd)		
+        elif chunkType == 644:
+            print("###anim bfme2 data") 
+            ReadAnimationTimeCodedChannel(file, subChunkEnd)		
         else:
             self.report({'ERROR'}, "unknown chunktype in CompressedAnimation: %s" % chunkType)
             print("!!!unknown chunktype in CompressedAnimation: %s" % chunkType)
@@ -465,7 +474,8 @@ def ReadMeshMaterialArray(file, self, chunkEnd):
     return Mats
 
 def ReadMeshMaterialSetInfo (file):
-    result = struct_w3d.MeshMaterialSetInfo(passCount = ReadLong(file), vertMatlCount = ReadLong(file), shaderCount = ReadLong(file), textureCount = ReadLong(file))
+    result = struct_w3d.MeshMaterialSetInfo(passCount = ReadLong(file), vertMatlCount = ReadLong(file), 
+		shaderCount = ReadLong(file), textureCount = ReadLong(file))
     return result	
 	
 #######################################################################################
@@ -475,7 +485,7 @@ def ReadMeshMaterialSetInfo (file):
 def ReadMeshVerticesArray(file, chunkEnd):
     verts = []
     while file.tell() < chunkEnd:
-        verts.append((ReadFloat(file), ReadFloat(file), ReadFloat(file)))
+        verts.append(ReadVector(file))
     return verts
 	
 def ReadMeshVertexInfluences(file, chunkEnd):
@@ -534,7 +544,7 @@ def ReadMeshShaderArray(file, chunkEnd):
     return shaders
 	
 #######################################################################################
-# Normal Map
+# Bump Maps
 #######################################################################################
 	
 def ReadNormalMapHeader(file, chunkEnd): 
@@ -580,9 +590,7 @@ def ReadNormalMap(file, self, chunkEnd):
         Chunktype = ReadLong(file)
         Chunksize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + Chunksize
-        if Chunktype == 81:
-            print("normal map flag")
-        elif Chunktype == 82:
+        if Chunktype == 82:
             Header = ReadNormalMapHeader(file, subChunkEnd)
         elif Chunktype == 83:
             EntryStruct = ReadNormalMapEntryStruct(file, self, subChunkEnd, EntryStruct)
@@ -591,6 +599,20 @@ def ReadNormalMap(file, self, chunkEnd):
             print("!!!unknown chunktype in NormalMap: %s" % chunkType)
             file.seek(Chunksize, 1)
     return struct_w3d.MeshNormalMap(header = Header, entryStruct = EntryStruct)
+	
+def ReadBumpMapArray(file, self, chunkEnd):
+    NormalMap = struct_w3d.MeshNormalMap()
+    while file.tell() < chunkEnd:
+        Chunktype = ReadLong(file)
+        Chunksize = GetChunkSize(ReadLong(file))
+        subChunkEnd = file.tell() + Chunksize
+        if Chunktype == 81:
+            NormalMap = ReadNormalMap(file, self, subChunkEnd)
+        else:
+            self.report({'ERROR'}, "unknown chunktype in BumpMapArray: %s" % chunkType)
+            print("!!!unknown chunktype in BumpMapArray: %s" % chunkType)
+            file.seek(Chunksize, 1)
+    return struct_w3d.MeshBumpMapArray(normalMap = NormalMap)
 
 #######################################################################################
 # AABTree (Axis-aligned-bounding-box)
@@ -645,15 +667,15 @@ def ReadAABTree(file, self, chunkEnd):
 	
 def ReadMeshHeader(file):
     result = struct_w3d.MeshHeader(version = GetVersion(ReadLong(file)), attrs =  ReadLong(file), meshName = ReadFixedString(file),
-    containerName = ReadFixedString(file),faceCount = ReadLong(file),
-    vertCount = ReadLong(file), matlCount = ReadLong(file), damageStageCount = ReadLong(file), sortLevel = ReadLong(file),
-    prelitVersion = ReadLong(file), futureCount = ReadLong(file),
-    vertChannelCount = ReadLong(file), faceChannelCount = ReadLong(file),
-    #bounding volumes
-    minCorner = ReadVector(file),
-    maxCorner = ReadVector(file),
-    sphCenter = ReadVector(file),
-    sphRadius =  ReadFloat(file))
+		containerName = ReadFixedString(file),faceCount = ReadLong(file),
+		vertCount = ReadLong(file), matlCount = ReadLong(file), damageStageCount = ReadLong(file), sortLevel = ReadLong(file),
+		prelitVersion = ReadLong(file), futureCount = ReadLong(file),
+		vertChannelCount = ReadLong(file), faceChannelCount = ReadLong(file),
+		#bounding volumes
+		minCorner = ReadVector(file),
+		maxCorner = ReadVector(file),
+		sphCenter = ReadVector(file),
+		sphRadius =  ReadFloat(file))
     return result
 
 def ReadMesh(self, file, chunkEnd):
@@ -671,7 +693,7 @@ def ReadMesh(self, file, chunkEnd):
     MeshShaders = []
     MeshTextures = []
     MeshUsertext = ""
-    MeshNormalMap = struct_w3d.MeshNormalMap()
+    MeshBumpMaps = struct_w3d.MeshBumpMapArray()
     MeshAABTree = struct_w3d.MeshAABTree()
 
     print("### NEW MESH: ###")
@@ -739,6 +761,7 @@ def ReadMesh(self, file, chunkEnd):
         elif Chunktype == 31:
             try:
                 MeshHeader = ReadMeshHeader(file)
+                print("## Name: " + MeshHeader.meshName)
                 print("Header")
             except:
                 self.report({'ERROR'}, "Mistake while reading Mesh Header (Mesh) Byte:%s" % file.tell())
@@ -803,7 +826,6 @@ def ReadMesh(self, file, chunkEnd):
             try:
                 MeshMaterialPass = ReadMeshMaterialPass(file, self, subChunkEnd)
                 print("MatPass")
-                print(Chunksize)
             except:
                 self.report({'ERROR'}, "Mistake while reading MeshMaterialPass (Mesh) Byte:%s" % file.tell())
                 print("Mistake while reading MeshMaterialPass (Mesh) Byte:%s" % file.tell())
@@ -811,11 +833,12 @@ def ReadMesh(self, file, chunkEnd):
                 print(e)
         elif Chunktype == 80:
             try:
-                MeshNormalMap = ReadNormalMap(file, self, subChunkEnd)
-                print("NormalMap")
+                print(Chunksize)
+                MeshBumpMaps = ReadBumpMapArray(file, self, subChunkEnd)
+                print("BumpMapArray")
             except:
-                self.report({'ERROR'}, "Mistake while reading NormalMap (Mesh) Byte:%s" % file.tell())
-                print("Mistake while reading NormalMap (Mesh) Byte:%s" % file.tell())
+                self.report({'ERROR'}, "Mistake while reading BumpMapArray (Mesh) Byte:%s" % file.tell())
+                print("Mistake while reading BumpMapArray (Mesh) Byte:%s" % file.tell())
                 e = sys.exc_info()[1]
                 print(e)
         elif Chunktype == 96:
@@ -851,8 +874,10 @@ def ReadMesh(self, file, chunkEnd):
             self.report({'ERROR'}, "unknown chunktype in Mesh: %s" % Chunktype)
             print("!!!unknown chunktype in Mesh: %s" % Chunktype)
             file.seek(Chunksize,1)
-    return struct_w3d.Mesh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals, vertInfs = MeshVerticesInfs,faces = MeshFaces, userText = MeshUsertext,
-                shadeIds = MeshShadeIds, matInfo = MeshMaterialInfo, matlheader = [], shaders = MeshShaders, vertMatls = MeshVerticeMats, textures = MeshTextures, matlPass = MeshMaterialPass, normalMap = MeshNormalMap, aabtree = MeshAABTree)
+    return struct_w3d.Mesh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals, vertInfs = MeshVerticesInfs, 
+				faces = MeshFaces, userText = MeshUsertext, shadeIds = MeshShadeIds, matInfo = MeshMaterialInfo, 
+				matlheader = [], shaders = MeshShaders, vertMatls = MeshVerticeMats, textures = MeshTextures, 
+				matlPass = MeshMaterialPass, bumpMaps = MeshBumpMaps, aabtree = MeshAABTree)
 
 #######################################################################################
 # create Box
@@ -895,25 +920,22 @@ def LoadTexture(self, givenfilepath, mesh, texName, tex_type):
             img = image
             found_img = True
 
+    # Create texture slot in material
+    mTex = mesh.materials[0].texture_slots.add()			
+			
     if found_img == False:
         tgapath = os.path.dirname(givenfilepath)+"/"+basename+".tga"
         ddspath = os.path.dirname(givenfilepath)+"/"+basename+".dds"
+        img = None
         try:
             img = bpy.data.images.load(tgapath)
-            found_img = True
         except:
             try:
                 img = bpy.data.images.load(ddspath)
-                found_img = True
             except:
                 self.report({'ERROR'}, "Cannot load image " + basename) 			
                 print("!!! Image file not found " + basename)
-				
-    # Create material
-    mTex = mesh.materials[0].texture_slots.add()
 
-    # Create image texture from image
-    if found_img == True:
         cTex = bpy.data.textures.new(texName, type = 'IMAGE')
         cTex.image = img
 		
@@ -921,7 +943,9 @@ def LoadTexture(self, givenfilepath, mesh, texName, tex_type):
             cTex.use_normal_map = True
             cTex.filter_size = 0.1
             cTex.use_filter_size_min = True
-        mTex.texture = cTex					
+        mTex.texture = cTex	
+    else:
+        mTex.texture = bpy.data.textures[texName]
 				
     mTex.texture_coords = 'UV'
     mTex.mapping = 'FLAT'
@@ -1131,8 +1155,10 @@ def MainImport(givenfilepath, context, self):
         for vm in m.vertMatls:
             mat = bpy.data.materials.new(m.header.meshName + "." + vm.vmName)
             mat.use_shadeless = True
-            mat.specular_color = (struct.unpack('B', vm.vmInfo.specular.r)[0], struct.unpack('B', vm.vmInfo.specular.g)[0], struct.unpack('B', vm.vmInfo.specular.b)[0])
-            mat.diffuse_color = (struct.unpack('B', vm.vmInfo.diffuse.r)[0], struct.unpack('B', vm.vmInfo.diffuse.g)[0], struct.unpack('B', vm.vmInfo.diffuse.b)[0])
+            mat.specular_color = (struct.unpack('B', vm.vmInfo.specular.r)[0], struct.unpack('B', vm.vmInfo.specular.g)[0],
+				struct.unpack('B', vm.vmInfo.specular.b)[0])
+            mat.diffuse_color = (struct.unpack('B', vm.vmInfo.diffuse.r)[0], struct.unpack('B', vm.vmInfo.diffuse.g)[0], 
+				struct.unpack('B', vm.vmInfo.diffuse.b)[0])
             mat.specular_intensity = vm.vmInfo.shininess
             mat.diffuse_intensity = vm.vmInfo.opacity
             mesh.materials.append(mat)
@@ -1141,15 +1167,15 @@ def MainImport(givenfilepath, context, self):
             LoadTexture(self, givenfilepath, mesh, tex.name, "diffuse")
 			
         #test if mesh has a normal map (if it has the diffuse texture is also stored there and it has no standard material)
-        if not m.normalMap.header.typeName == "":
+        if not m.bumpMaps.normalMap.entryStruct.normalMap == "":
             mat = bpy.data.materials.new(m.header.meshName + ".BumpMaterial")
             mat.use_shadeless = True
             mesh.materials.append(mat)
 			#to show textures properly first apply the normal texture
-            if not m.normalMap.entryStruct.normalMap == "":
-                LoadTexture(self, givenfilepath, mesh, m.normalMap.entryStruct.normalMap, "normal")
-            if not m.normalMap.entryStruct.diffuseTexName == "":
-                LoadTexture(self, givenfilepath, mesh, m.normalMap.entryStruct.diffuseTexName, "diffuse")
+            if not m.bumpMaps.normalMap.entryStruct.normalMap == "":
+                LoadTexture(self, givenfilepath, mesh, m.bumpMaps.normalMap.entryStruct.normalMap, "normal")
+            if not m.bumpMaps.normalMap.entryStruct.diffuseTexName == "":
+                LoadTexture(self, givenfilepath, mesh, m.bumpMaps.normalMap.entryStruct.diffuseTexName, "diffuse")
 
         #hierarchy stuff
         if Hierarchy.header.pivotCount > 0:

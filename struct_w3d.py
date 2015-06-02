@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 28.05.2015
+#Last Modification 02.06.2015
 #Structs of the W3D Format used in games by Westwood & EA
 from mathutils import Vector, Quaternion
 
@@ -116,7 +116,7 @@ class HLod(Struct):
 	
 class Box(Struct): 
     version = Version()
-    attributes = 0
+    attributes = 1
     name = ""
     color = RGBA()
     center = Vector((0.0, 0.0 ,0.0))
@@ -168,9 +168,9 @@ class MeshMaterial(Struct):
 
 class MeshMaterialSetInfo(Struct):
     passCount = 1
-    vertMatlCount = 1
+    vertMatlCount = 0
     shaderCount = 0
-    textureCount = 1
+    textureCount = 0
 	
 #######################################################################################
 # Vertices
@@ -197,22 +197,23 @@ class MeshFace(Struct):
 #######################################################################################
 	
 class MeshShader(Struct):
-	depthCompare = 0 
-	depthMask = 0 
+    #filled with some standard values 
+	depthCompare = 3 
+	depthMask = 1 
 	colorMask = 0 
 	destBlend = 0 
-	fogFunc = 0 
-	priGradient = 0 
+	fogFunc = 2 
+	priGradient = 1 
 	secGradient = 0 
-	srcBlend = 0
-	texturing = 0
+	srcBlend = 1
+	texturing = 1
 	detailColorFunc = 0
 	detailAlphaFunc = 0
-	shaderPreset = 0
+	shaderPreset = 2
 	alphaTest = 0
 	postDetailColorFunc = 0
 	postDetailAlphaFunc = 0 
-	pad = 0
+	pad = 2
 	
 #######################################################################################
 # Normal Map
@@ -228,15 +229,19 @@ class MeshNormalMapEntryStruct(Struct):
     diffuseTexName = ""
     unknown_nrm = 0 #dont know what this is for and what it is called
     normalMap = ""
-    ambientColor = []
-    diffuseColor = []
-    specularColor = []
+    bumpScale = 0
+    ambientColor = [0.0, 0.0, 0.0, 0.0]
+    diffuseColor = [0.0, 0.0, 0.0, 0.0]
+    specularColor = [0.0, 0.0, 0.0, 0.0]
     specularExponent = 0.0
     alphaTestEnable = 0
 	
 class MeshNormalMap(Struct):
     header = MeshNormalMapHeader()
     entryStruct = MeshNormalMapEntryStruct()
+	
+class MeshBumpMapArray(Struct):
+    normalMap = MeshNormalMap()
 	
 #######################################################################################
 # AABTree (Axis-aligned-bounding-box)
@@ -273,8 +278,8 @@ class MeshHeader(Struct):
     sortLevel = 0
     prelitVersion = 0
     futureCount = 0
-    vertChannelCount = 0
-    faceChannelCount = 0
+    vertChannelCount = 3
+    faceChannelCount = 1
     minCorner = Vector((0.0, 0.0 ,0.0))
     maxCorner = Vector((0.0, 0.0 ,0.0))
     sphCenter = Vector((0.0, 0.0 ,0.0))
@@ -294,5 +299,5 @@ class Mesh(Struct):
     vertMatls = []
     textures = []
     matlPass = MeshMaterialPass()
-    normalMap = MeshNormalMap()
+    bumpMaps = MeshBumpMapArray()
     aabtree = MeshAABTree()

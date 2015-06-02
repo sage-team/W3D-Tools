@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 28.05.2015
+#Last Modification 02.06.2015
 #Exports the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -13,6 +13,10 @@ from mathutils import Vector, Quaternion
 from . import struct_w3d
 
 #TODO 
+
+# change test if we need to write normal map chunk
+
+# fix sphere calculation
 
 # dont write data that is not needed / empty chunks (e.g. vertex influences)
 
@@ -380,6 +384,168 @@ def WriteMeshFaceArray(file, size, faces):
         WriteLong(file, face.attrs)
         WriteVector(file, face.normal)
         WriteFloat(file, face.distance)
+		
+#######################################################################################
+# Shader
+#######################################################################################
+	
+def WriteMeshShaderArray(file, size, shaders):
+    WriteLong(file, 41) #chunktype
+    WriteLong(file, size) #chunksize
+    for shader in shaders:
+        WriteUnsignedByte(file, shader.depthCompare)
+        WriteUnsignedByte(file, shader.depthMask)
+        WriteUnsignedByte(file, shader.colorMask)
+        WriteUnsignedByte(file, shader.destBlend)
+        WriteUnsignedByte(file, shader.fogFunc)		
+        WriteUnsignedByte(file, shader.priGradient)
+        WriteUnsignedByte(file, shader.secGradient)
+        WriteUnsignedByte(file, shader.srcBlend)
+        WriteUnsignedByte(file, shader.texturing)
+        WriteUnsignedByte(file, shader.detailColorFunc)
+        WriteUnsignedByte(file, shader.detailAlphaFunc)		
+        WriteUnsignedByte(file, shader.shaderPreset)
+        WriteUnsignedByte(file, shader.alphaTest)
+        WriteUnsignedByte(file, shader.postDetailColorFunc)
+        WriteUnsignedByte(file, shader.postDetailAlphaFunc)
+        WriteUnsignedByte(file, shader.pad)
+		
+#######################################################################################
+# Bump Maps
+#######################################################################################
+	
+def WriteNormalMapHeader(file, header): 
+    WriteLong(file, 82) #chunktype
+    WriteLong(file, 37) #chunksize
+	
+    WriteUnsignedByte(file, header.number)
+    WriteLongFixedString(file, header.typeName)
+    WriteLong(file, header.reserved)
+
+def WriteNormalMapEntryStruct(file, entryStruct): 
+    WriteLong(file, 83) #chunktype
+    WriteLong(file, 4 + 4 + len("DiffuseTexture") + 1 + 4 + len(entryStruct.diffuseTexName) + 1) #chunksize
+    WriteLong(file, 1) #texture type
+    WriteLong(file, len("DiffuseTexture") + 1) 
+    WriteString(file, "DiffuseTexture")
+    WriteLong(file, 1) #unknown value
+    WriteString(file, entryStruct.diffuseTexName)
+	
+    WriteLong(file, 83) #chunktype
+    WriteLong(file, 4 + 4 + len("NormalMap") + 1 + 4 + len(entryStruct.normalMap) + 1) #chunksize
+    WriteLong(file, 1) #texture type
+    WriteLong(file, len("NormalMap") + 1) 
+    WriteString(file, "NormalMap")
+    WriteLong(file, 1) #unknown value
+    WriteString(file, entryStruct.normalMap)
+	
+    WriteLong(file, 83) #chunktype
+    WriteLong(file, 4 + 4 + len("BumpScale") + 1 + 4) #chunksize
+    WriteLong(file, 2) #bumpScale
+    WriteLong(file, len("BumpScale") + 1) 
+    WriteString(file, "BumpScale")
+    WriteFloat(file, entryStruct.bumpScale)
+	
+    WriteLong(file, 83) #chunktype
+    WriteLong(file, 4 + 4 + len("AmbientColor") + 1 + 16) #chunksize
+    WriteLong(file, 5) #color
+    WriteLong(file, len("AmbientColor") + 1) 
+    WriteString(file, "AmbientColor")
+    WriteFloat(file, entryStruct.ambientColor[0])
+    WriteFloat(file, entryStruct.ambientColor[1])
+    WriteFloat(file, entryStruct.ambientColor[2])
+    WriteFloat(file, entryStruct.ambientColor[3])
+	
+    WriteLong(file, 83) #chunktype
+    WriteLong(file, 4 + 4 + len("DiffuseColor") + 1 + 16) #chunksize
+    WriteLong(file, 5) #color
+    WriteLong(file, len("DiffuseColor") + 1) 
+    WriteString(file, "DiffuseColor")
+    WriteFloat(file, entryStruct.diffuseColor[0])
+    WriteFloat(file, entryStruct.diffuseColor[1])
+    WriteFloat(file, entryStruct.diffuseColor[2])
+    WriteFloat(file, entryStruct.diffuseColor[3])
+	
+    WriteLong(file, 83) #chunktype
+    WriteLong(file, 4 + 4 + len("SpecularColor") + 1 + 16) #chunksize
+    WriteLong(file, 5) #color
+    WriteLong(file, len("SpecularColor") + 1) 
+    WriteString(file, "SpecularColor")
+    WriteFloat(file, entryStruct.specularColor[0])
+    WriteFloat(file, entryStruct.specularColor[1])
+    WriteFloat(file, entryStruct.specularColor[2])
+    WriteFloat(file, entryStruct.specularColor[3])
+	
+    WriteLong(file, 83) #chunktype
+    WriteLong(file, 4 + 4 + len("SpecularExponent") + 1 + 4) #chunksize
+    WriteLong(file, 2) #specularExponent
+    WriteLong(file, len("SpecularExponent") + 1) 
+    WriteString(file, "SpecularExponent")
+    WriteFloat(file, entryStruct.specularExponent)
+	
+    WriteLong(file, 83) #chunktype
+    WriteLong(file, 4 + 4 + len("AlphaTestEnable") + 1 + 1) #chunksize
+    WriteLong(file, 7) #alphaTest
+    WriteLong(file, len("AlphaTestEnable") + 1) 
+    WriteString(file, "AlphaTestEnable")
+    WriteUnsignedByte(file, entryStruct.alphaTestEnable)
+
+def WriteNormalMap(file, normalMap):
+    WriteLong(file, 81) #chunktype
+    WriteLong(file, 45 + 301 + len(normalMap.entryStruct.diffuseTexName) + 1 + len(normalMap.entryStruct.normalMap) + 1) #chunksize
+
+    WriteNormalMapHeader(file, normalMap.header)
+    WriteNormalMapEntryStruct(file, normalMap.entryStruct)
+	
+def WriteMeshBumpMapArray(file, size, bumpMapArray):
+    WriteLong(file, 80) #chunktype
+    WriteLong(file, size) #chunksize
+
+    WriteNormalMap(file, bumpMapArray.normalMap)
+	
+#######################################################################################
+# Mesh Sphere
+#######################################################################################	
+
+def CalculateMeshSphere(mesh, Header):
+    # get the point with the biggest distance to x and store it in y
+    x = mesh.vertices[0]
+    y = mesh.vertices[1]
+    dist = ((y.co[0] - x.co[0])**2 + (y.co[1] - x.co[1])**2 + (y.co[2] - x.co[2])**2)**(1/2)
+    for v in mesh.vertices:
+        curr_dist = ((v.co[0] - x.co[0])**2 + (v.co[1] - x.co[1])**2 + (v.co[2] - x.co[2])**2)**(1/2)
+        if (curr_dist > dist):
+            dist = curr_dist
+            y = v
+					
+    #get the point with the biggest distance to y and store it in z
+    z = mesh.vertices[2]
+    dist = ((z.co[0] - y.co[0])**2 + (z.co[1] - y.co[1])**2 + (z.co[2] - y.co[2])**2)**(1/2)
+    for v in mesh.vertices:
+        curr_dist = ((v.co[0] - y.co[0])**2 + (v.co[1] - y.co[1])**2 + (v.co[2] - y.co[2])**2)**(1/2)
+        if (curr_dist > dist):
+            dist = curr_dist
+            z = v   
+             
+    # the center of the sphere is between y and z
+    vec_y = Vector(y.co.xyz)
+    vec_z = Vector(z.co.xyz)
+    y_z = ((vec_z - vec_y)/2)
+    m = Vector(vec_y + y_z)
+    radius = y_z.length
+
+    #test if any of the vertices is outside the sphere (if so update the sphere)
+    for v in mesh.vertices:
+        curr_dist = ((v.co[0] - m[0])**2 + (v.co[1] - m[1])**2 + (v.co[2] - m[2])**2)**(1/2)
+        if curr_dist > radius:
+            delta = (curr_dist - radius)/2
+            radius += delta
+            m += (Vector(v.co.xyz - m)).normalized() * delta  	 	
+    print("#######")					
+    print(m)
+    print(radius)
+    Header.sphCenter = m
+    Header.sphRadius = radius
 	
 #######################################################################################
 # Mesh
@@ -389,6 +555,7 @@ def WriteMeshHeader(file, size, header):
     WriteLong(file, 31) #chunktype
     WriteLong(file, size) #chunksize
 	
+    print("## Name: " + header.meshName)
     WriteLong(file, MakeVersion(header.version)) 
     WriteLong(file, header.attrs) 
     WriteFixedString(file, header.meshName)
@@ -412,10 +579,10 @@ def WriteMesh(file, mesh):
     WriteLong(file, 0) #chunktype
 	
     headerSize = 116
-    vertSize = len(mesh.verts)*12
-    normSize = len(mesh.normals)*12
-    faceSize = len(mesh.faces)*32
-    infSize = len(mesh.vertInfs)*8
+    vertSize = len(mesh.verts) * 12
+    normSize = len(mesh.normals) * 12
+    faceSize = len(mesh.faces) * 32
+    infSize = len(mesh.vertInfs) * 8
     matSetInfoSize = 16
     matArraySize = HEAD
     textureArraySize = HEAD
@@ -431,10 +598,32 @@ def WriteMesh(file, mesh):
             if not (tex == None):
                 textureArraySize += HEAD + len(tex.name) + 1 #+ HEAD + 12
      
-    materialPassSize = HEAD + len(mesh.matlPass.vmIds) * 4 + HEAD + len(mesh.matlPass.shaderIds) * 4 + HEAD + HEAD + len(mesh.matlPass.txStage.txIds) * 4 + HEAD + len(mesh.matlPass.txStage.txCoords) * 8
+    shaderArraySize = len(mesh.shaders) * 16
+	 
+    materialPassSize = (HEAD + len(mesh.matlPass.vmIds) * 4 + HEAD + len(mesh.matlPass.shaderIds) * 4 + HEAD + HEAD 
+		+ len(mesh.matlPass.txStage.txIds) * 4 + HEAD + len(mesh.matlPass.txStage.txCoords) * 8)
+		
+    bumpMapArraySize = (HEAD + 45 + 301 + len(mesh.bumpMaps.normalMap.entryStruct.diffuseTexName) + 1 
+		+ len(mesh.bumpMaps.normalMap.entryStruct.normalMap) + 1)
 	
 	#size of the mesh chunk
-    size = HEAD + headerSize + HEAD + vertSize + HEAD + normSize + HEAD + faceSize + HEAD + infSize + HEAD + matSetInfoSize + HEAD + matArraySize + HEAD + textureArraySize + HEAD + materialPassSize
+    size = HEAD + headerSize 
+    size += HEAD + vertSize 
+    size += HEAD + normSize 
+    size += HEAD + faceSize 
+    if len(mesh.vertInfs) > 0:
+        size += HEAD + infSize 
+    size += HEAD + matSetInfoSize 
+    if mesh.matInfo.vertMatlCount > 0:
+        size += HEAD + matArraySize
+    if mesh.matInfo.textureCount > 0:
+        size += HEAD + textureArraySize 
+    if mesh.matInfo.shaderCount > 0:
+        size += HEAD + shaderArraySize
+    if mesh.matInfo.passCount > 0:
+        size += HEAD + materialPassSize
+    if not mesh.bumpMaps.normalMap.entryStruct.diffuseTexName == "":
+        size += HEAD + bumpMapArraySize
     
     WriteLong(file, size) #chunksize
 	
@@ -446,19 +635,28 @@ def WriteMesh(file, mesh):
     print("Normals")
     WriteMeshFaceArray(file, faceSize, mesh.faces)
     print("Faces")
-    WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
-    print("Vertex Influences")
+    if len(mesh.vertInfs) > 0:
+        WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
+        print("Vertex Influences")
     WriteMeshMaterialSetInfo(file, matSetInfoSize, mesh.matInfo)
     print("MaterialSetInfo")
-    WriteMeshMaterialArray(file, matArraySize, mesh.vertMatls)
-    print("Materials")
-    WriteTextureArray(file, textureArraySize, mesh.textures)
-    print("Textures")
-	
-	#not working yet properly
-	
-    WriteMeshMaterialPass(file, materialPassSize, mesh.matlPass)
-    print("MaterialPass")
+    if mesh.matInfo.vertMatlCount > 0:
+        WriteMeshMaterialArray(file, matArraySize, mesh.vertMatls)
+        print("Materials")
+    if mesh.matInfo.textureCount > 0:
+        WriteTextureArray(file, textureArraySize, mesh.textures)
+        print("Textures")
+    print(mesh.matInfo.shaderCount)
+    if mesh.matInfo.shaderCount > 0:
+        WriteMeshShaderArray(file, shaderArraySize, mesh.shaders)
+        print("Shader")
+    if mesh.matInfo.passCount > 0:
+        WriteMeshMaterialPass(file, materialPassSize, mesh.matlPass)
+        print("MaterialPass")
+    if not mesh.bumpMaps.normalMap.entryStruct.normalMap == "":
+        WriteMeshBumpMapArray(file, bumpMapArraySize, mesh.bumpMaps)
+        print("BumpMaps")
+    
 	
 #######################################################################################
 # Main Export
@@ -467,11 +665,13 @@ def WriteMesh(file, mesh):
 def MainExport(givenfilepath, self, context):
     print("Run Export")
     HLod = struct_w3d.HLod()
+    HLod.lodArray.subObjects = []
 	
     Hierarchy = struct_w3d.Hierarchy()
 	
     roottransform = struct_w3d.HierarchyPivot()
     roottransform.name = "ROOTTRANSFORM"
+    roottransform.parentID = -1
     Hierarchy.pivots.append(roottransform)
     
 	#switch to object mode
@@ -496,6 +696,8 @@ def MainExport(givenfilepath, self, context):
              if not bone.parent == None:
                  ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == bone.parent.name] #return an array of indices (in this case only one value)
                  pivot.parentID = ids[0]
+             else:
+                 pivot.parentID = 0
              pivot.position = bone.location
              pivot.eulerAngles = bone.rotation_euler
              pivot.rotation = bone.rotation_quaternion
@@ -515,7 +717,9 @@ def MainExport(givenfilepath, self, context):
             WriteBox(sknFile, Box)
         else:
             Mesh = struct_w3d.Mesh()
-            Header = struct_w3d.MeshHeader()			
+            Header = struct_w3d.MeshHeader()
+            Mesh.bumpMaps = struct_w3d.MeshBumpMapArray()
+            Mesh.matInfo = struct_w3d.MeshMaterialSetInfo()			
 		
             verts = []
             normals = [] 
@@ -530,15 +734,63 @@ def MainExport(givenfilepath, self, context):
             triangulate(mesh)
 		
             Header.vertCount = len(mesh.vertices)
-            for vert in mesh.vertices:
-                verts.append(vert.co.xyz)
-            Mesh.verts = verts
-		
             Mesh.matlPass.txStage.txCoords = []
-            for vert in mesh.vertices:
-                normals.append(vert.normal)
+            Mesh.vertInfs = []
+            group_lookup = {g.index: g.name for g in mesh_ob.vertex_groups}
+            groups = {name: [] for name in group_lookup.values()}
+            min = Vector((0.0, 0.0, 0.0))
+            max = Vector((0.0, 0.0, 0.0))
+            for v in mesh.vertices:
+                verts.append(v.co.xyz)
+                normals.append(v.normal)
                 Mesh.matlPass.txStage.txCoords.append((0.0, 0.0)) #just to fill the array 
+				
+				#min and max of the mesh
+                if (v.co[0] < min[0]):
+                    min[0] = v.co[0]
+                if (v.co[1] < min[1]):
+                    min[1] = v.co[1]
+                if (v.co[2] < min[2]):
+                    min[2] = v.co[2]
+					
+                if (v.co[0] > max[0]):
+                    max[0] = v.co[0]
+                if (v.co[1] > max[1]):
+                    max[1] = v.co[1]
+                if (v.co[2] > max[2]):
+                    max[2] = v.co[2]
+				
+				#vertex influences
+                vertInf = struct_w3d.MeshVertexInfluences()
+                if len(v.groups) > 0:
+				    #has to be this complicated, otherwise the vertex groups would be corrupted
+                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[0].group].name] #return an array of indices (in this case only one value)
+                    if len(ids) > 0:
+                        vertInf.boneIdx = ids[0]
+                    vertInf.boneInf = v.groups[0].weight
+                    Mesh.vertInfs.append(vertInf)
+                elif len(v.groups) > 1:
+                    #has to be this complicated, otherwise the vertex groups would be corrupted
+                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[0].group].name] #return an array of indices (in this case only one value)
+                    if len(ids) > 0:
+                        vertInf.boneIdx = ids[0]
+                    vertInf.boneInf = v.groups[0].weight
+                    #has to be this complicated, otherwise the vertex groups would be corrupted
+                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[1].group].name] #return an array of indices (in this case only one value)
+                    if len(ids) > 0:
+                        vertInf.boneIdx = ids[0]
+                    vertInf.xtraInf = v.groups[1].weight
+                    Mesh.vertInfs.append(vertInf)
+                elif len(v.groups) > 2: 
+                    context.report({'ERROR'}, "max 2 bone influences per vertex supported!")
+                    print("Error: max 2 bone influences per vertex supported!")
+	
+            CalculateMeshSphere(mesh, Header)
+			
+            Mesh.verts = verts
             Mesh.normals = normals
+            Header.minCorner = min
+            Header.maxCorner =  max
 
             for face in mesh.polygons:
                 triangle = struct_w3d.MeshFace()
@@ -568,58 +820,47 @@ def MainExport(givenfilepath, self, context):
             Mesh.matlPass.txStage.txIds = []
             Mesh.matlPass.vmIds.append(0)
             Mesh.matlPass.shaderIds.append(0)
-            Mesh.matlPass.txStage.txIds.append(0)
-			
-			#vertex influences
-            group_lookup = {g.index: g.name for g in mesh_ob.vertex_groups}
-            groups = {name: [] for name in group_lookup.values()}
-            for v in mesh.vertices:
-                vertInf = struct_w3d.MeshVertexInfluences()
-                if len(v.groups) > 0:
-				    #has to be this complicated, otherwise the vertex groups would be corrupted
-                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[0].group].name] #return an array of indices (in this case only one value)
-                    if len(ids) > 0:
-                        vertInf.boneIdx = ids[0]
-                    vertInf.boneInf = v.groups[0].weight
-                    Mesh.vertInfs.append(vertInf)
-                elif len(v.groups) > 1:
-                    #has to be this complicated, otherwise the vertex groups would be corrupted
-                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[0].group].name] #return an array of indices (in this case only one value)
-                    if len(ids) > 0:
-                        vertInf.boneIdx = ids[0]
-                    vertInf.boneInf = v.groups[0].weight
-                    #has to be this complicated, otherwise the vertex groups would be corrupted
-                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[1].group].name] #return an array of indices (in this case only one value)
-                    if len(ids) > 0:
-                        vertInf.boneIdx = ids[0]
-                    vertInf.xtraInf = v.groups[1].weight
-                    Mesh.vertInfs.append(vertInf)
-                elif len(v.groups) > 2: 
-                    context.report({'ERROR'}, "max 2 bone influences per vertex supported!")
-                    print("Error: max 2 bone influences per vertex supported!")
+            Mesh.matlPass.txStage.txIds.append(0)      
+					
+            #shader
+            shader = struct_w3d.MeshShader()
+            Mesh.shaders = []
+            Mesh.shaders.append(shader)
+            Mesh.matInfo.shaderCount = 1
 				
             Mesh.vertMatls = [] 
             Mesh.textures = [] 
             for mat in mesh.materials:
-                meshMaterial = struct_w3d.MeshMaterial()
-                
-                meshMaterial.vmName = (os.path.splitext(os.path.basename(mat.name))[1])[1:]
-                meshVMInfo = struct_w3d.VertexMaterial()
-				
-                meshMaterial.vmInfo = meshVMInfo
-                Mesh.vertMatls.append(meshMaterial)
-			
-                for tex in bpy.data.materials[mesh_ob.name + "." + meshMaterial.vmName].texture_slots:
-                    if not (tex == None):
-                        #if not "_NRM" in tex.name:
-                        texture = struct_w3d.Texture()
-                        texture.name = tex.name
-                        Mesh.textures.append(texture)
+                matName = (os.path.splitext(os.path.basename(mat.name))[1])[1:]
+                if matName == "BumpMaterial":
+                    Mesh.matInfo.shaderCount = 0
+                    for tex in bpy.data.materials[mesh_ob.name + "." + matName].texture_slots:
+                        if not (tex == None):
+                            if '_NRM' in tex.name:
+                                Header.vertChannelCount = 99
+                                Mesh.bumpMaps.normalMap.entryStruct.normalMap = tex.name
+                            else:
+                                Mesh.bumpMaps.normalMap.entryStruct.diffuseTexName = tex.name				
+                else:
+                    Mesh.matInfo.vertMatlCount += 1
+                    meshMaterial = struct_w3d.MeshMaterial()
+        
+                    meshMaterial.vmName = matName
+                    meshVMInfo = struct_w3d.VertexMaterial()
+                    meshMaterial.vmInfo = meshVMInfo
+                    Mesh.vertMatls.append(meshMaterial)
+                    for tex in bpy.data.materials[mesh_ob.name + "." + meshMaterial.vmName].texture_slots:
+                        if not (tex == None):
+                            Mesh.matInfo.textureCount += 1
+                            texture = struct_w3d.Texture()
+                            texture.name = tex.name
+                            Mesh.textures.append(texture)
 
             Header.matlCount = len(Mesh.vertMatls)
 			
             if len(mesh_ob.vertex_groups) > 0:		 
                 Header.attrs = 131072 #type skin
+                Header.vertChannelCount = 19
             else:
                 Header.attrs = 0 #type normal mesh
 				
