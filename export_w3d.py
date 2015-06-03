@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 02.06.2015
+#Last Modification 03.06.2015
 #Exports the W3D Format used in games by Westwood & EA
 import bpy
 import operator

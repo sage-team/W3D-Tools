@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 02.06.2015
+#Last Modification 03.06.2015
 #Loads the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -13,6 +13,8 @@ from mathutils import Vector, Quaternion
 from . import struct_w3d
 
 #TODO 
+
+#set mat alpha dependend on shader.alphaTestEnable
 
 #textures are still created multiple times (e.g. texture.tga.001 etc)
 
@@ -78,6 +80,9 @@ def ReadFloat(file):
     #binary_format = "<f" float
     return (struct.unpack("f",file.read(4))[0])
 	
+def ReadSignedByte(file):
+    return (struct.unpack("<b",file.read(1))[0])	
+	
 def ReadUnsignedByte(file):
     return (struct.unpack("<B",file.read(1))[0])
 	
@@ -88,6 +93,11 @@ def ReadQuaternion(file):
     quat = (ReadFloat(file), ReadFloat(file), ReadFloat(file), ReadFloat(file))
     #change order from xyzw to wxyz
     return Quaternion((quat[3], quat[0], quat[1], quat[2]))
+	
+def ReadCompressedQuaternion(file, faktor):
+    quat = (ReadSignedByte(file) / faktor, ReadSignedByte(file) / faktor, ReadSignedByte(file) / faktor, ReadSignedByte(file) / faktor)
+    #change order from xyzw to wxyz
+    return Quaternion((quat[3], quat[0], quat[1], quat[2]))	
 	
 def GetVersion(data):
     return struct_w3d.Version(major = (data)>>16, minor = (data) & 0xFFFF)
@@ -173,18 +183,9 @@ def ReadAnimationChannel(file, self, chunkEnd):
         self.report({'ERROR'}, "!!!unsupported vector len %s" % VectorLen)
         print("!!!unsupported vector len %s" % VectorLen)
         while file.tell() < chunkEnd:
-            file.read(4)
+            file.read(1)
     return struct_w3d.AnimationChannel(firstFrame = FirstFrame, lastFrame = LastFrame, vectorLen = VectorLen, 
 		type = Type, pivot = Pivot, pad = Pad, data = Data)
-	
-def ReadAnimationBitChannel(file, chunkEnd):
-    while file.tell() < chunkEnd:
-        print("###anim bit channel")
-        print(ReadShort(file))
-        print(ReadShort(file))
-        print(ReadShort(file))
-        print(ReadShort(file))
-        print(file.read(8))
 
 def ReadAnimation(file, self, chunkEnd):
     print("### NEW ANIMATION: ###")
@@ -198,9 +199,6 @@ def ReadAnimation(file, self, chunkEnd):
             Header = ReadAnimationHeader(file, subChunkEnd)
         elif chunkType == 514:
             Channels.append(ReadAnimationChannel(file, self, subChunkEnd))
-        #elif chunkType == 515:
-        #    print("##### anim bit channels not supported yet!")
-        #    #ReadAnimationBitChannel(file, subChunkEnd)
         else:
             self.report({'ERROR'}, "unknown chunktype in Animation: %s" % chunkType)
             print("!!!unknown chunktype in Animation: %s" % chunkType)
@@ -211,60 +209,52 @@ def ReadCompressedAnimationHeader(file, chunkEnd):
     return struct_w3d.CompressedAnimationHeader(version = GetVersion(ReadLong(file)), name = ReadFixedString(file), 
 		hieraName = ReadFixedString(file), numFrames = ReadLong(file), frameRate = ReadShort(file), flavor = ReadShort(file))
 	
-def ReadAnimationTimeCodedChannel(file, chunkEnd):
+#seems the data is compressed to one byte per float which is modified by the MagicNum
+# needs to be tested
+def ReadTimeCodedAnimVector(file, self, chunkEnd):
     Data = []
-    magicNum = ReadShort(file)
+    MagicNum = ReadShort(file) #0 or 256 or 512
+    if MagicNum == 0:
+        MagicNum = 1 #to prevent division by zero
     VectorLen = ReadUnsignedByte(file)
     Flag = ReadUnsignedByte(file)
-    TimeCodesCount = ReadShort(file)
+    TimeCodesCount = ReadShort(file) # what is this for? common values: 1, 3, 4, 5, 6, 7, 8, 50, 100, 157
     Pivot = ReadShort(file)
-	
-	#size = 8
 
-    print("time coded channel")
-    print(Pivot)
-    print(VectorLen)
     if VectorLen == 1:
         while file.tell() < chunkEnd:
-            #tCode = ReadShort(file)
-            print(ReadFloat(file))
-            #Data.append(ReadFloat(file))
+            Data.append(ReadSignedByte(file) / MagicNum)
     elif VectorLen == 4:
         while file.tell() < chunkEnd:
-            #tCode = ReadLong(file)
-            ReadFloat(file)
-            #print(ReadQuaternion(file))
-            #Data.append(ReadQuaternion(file))
+            Data.append(ReadCompressedQuaternion(file, MagicNum))
     else:
         while file.tell() < chunkEnd:
-            file.read(4)
+            self.report({'ERROR'}, "!!!unsupported vector len %s" % VectorLen)
+            print("!!!unsupported vector len %s" % VectorLen)
+            file.read(1)
+    return struct_w3d.TimeCodedAnimVector(magicNum = MagicNum, vectorLen = VectorLen, flag = Flag, 
+		timeCodesCount = TimeCodesCount, pivot = Pivot, data = Data)
 		
 def ReadCompressedAnimation(file, self, chunkEnd):
     print("### NEW COMPRESSED ANIMATION: ###")
     Header = struct_w3d.CompressedAnimationHeader()
-    Channels = []
+    AnimVectors = []
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
-        print(chunkType)
-        print(chunkSize)
         if chunkType == 641:
             Header = ReadCompressedAnimationHeader(file, subChunkEnd)
             print(Header.hieraName)
         #elif chunkType == 642:
-        #    print("##### anim bit channels for compressed animation are not supported yet!")
-        #    #Channels.append(ReadAnimationChannel(file, subChunkEnd))
         #elif chunkType == 643:
-        #    print("##### anim bit channels not supported yet!")
-        #    #ReadAnimationBitChannel(file, subChunkEnd)
         elif chunkType == 644:
-            print("###anim bfme2 data") 
-            ReadAnimationTimeCodedChannel(file, subChunkEnd)		
+            AnimVectors.append(ReadTimeCodedAnimVector(file, self, subChunkEnd))	
         else:
             self.report({'ERROR'}, "unknown chunktype in CompressedAnimation: %s" % chunkType)
             print("!!!unknown chunktype in CompressedAnimation: %s" % chunkType)
             file.seek(chunkSize,1)	
+    return struct_w3d.CompressedAnimation(header = Header, animVectors = AnimVectors)
 
 #######################################################################################
 # HLod
@@ -921,7 +911,8 @@ def LoadTexture(self, givenfilepath, mesh, texName, tex_type):
             found_img = True
 
     # Create texture slot in material
-    mTex = mesh.materials[0].texture_slots.add()			
+    mTex = mesh.materials[0].texture_slots.add()
+    mTex.use_map_alpha = True	
 			
     if found_img == False:
         tgapath = os.path.dirname(givenfilepath)+"/"+basename+".tga"
@@ -1155,6 +1146,9 @@ def MainImport(givenfilepath, context, self):
         for vm in m.vertMatls:
             mat = bpy.data.materials.new(m.header.meshName + "." + vm.vmName)
             mat.use_shadeless = True
+            mat.use_transparency = True
+            mat.transparency_method = "Z_TRANSPARENCY"
+            mat.alpha = vm.vmInfo.translucency
             mat.specular_color = (struct.unpack('B', vm.vmInfo.specular.r)[0], struct.unpack('B', vm.vmInfo.specular.g)[0],
 				struct.unpack('B', vm.vmInfo.specular.b)[0])
             mat.diffuse_color = (struct.unpack('B', vm.vmInfo.diffuse.r)[0], struct.unpack('B', vm.vmInfo.diffuse.g)[0], 
@@ -1170,6 +1164,9 @@ def MainImport(givenfilepath, context, self):
         if not m.bumpMaps.normalMap.entryStruct.normalMap == "":
             mat = bpy.data.materials.new(m.header.meshName + ".BumpMaterial")
             mat.use_shadeless = True
+            mat.use_transparency = True
+            mat.transparency_method = "Z_TRANSPARENCY"
+            mat.alpha = 0.0
             mesh.materials.append(mat)
 			#to show textures properly first apply the normal texture
             if not m.bumpMaps.normalMap.entryStruct.normalMap == "":
@@ -1288,12 +1285,11 @@ def MainImport(givenfilepath, context, self):
                 self.report({'ERROR'}, "unsupported channel type: %s" %channel.type)
                 print("unsupported channel type: %s" %channel.type)
 	
-    #render the loaded textures				
+    #to render the loaded textures				
     bpy.context.scene.game_settings.material_mode = 'GLSL'
     #set render mode to textured or solid
     for scrn in bpy.data.screens:
         if scrn.name == 'Default':
-            #bpy.context.window.screen = scrn  #is this necessary?
             for area in scrn.areas:
                 if area.type == 'VIEW_3D':
                     for space in area.spaces:

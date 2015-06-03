@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 02.06.2015
+#Last Modification 03.06.2015
 #Structs of the W3D Format used in games by Westwood & EA
 from mathutils import Vector, Quaternion
 
@@ -83,6 +83,19 @@ class CompressedAnimationHeader(Struct):
     numFrames = 0
     frameRate = 0
     flavor = 0
+	
+class TimeCodedAnimVector(Struct):
+    magicNum = 0
+    vectorLen = 0
+    flag = 0
+    timeCodesCount = 0 #what is this for?
+    pivot = 0
+    data = []
+    
+class CompressedAnimation(Struct): 
+    header = CompressedAnimationHeader()
+    animVectors = []
+    
 	
 #######################################################################################
 # HLod
