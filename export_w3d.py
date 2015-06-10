@@ -29,7 +29,6 @@ HEAD = 8 #4(long = chunktype) + 4 (long = chunksize)
 #######################################################################################
 
 def WriteString(file, string):
-	#TODO: check if it does write nullterminated strings
     file.write(bytes(string, 'UTF-8'))
 	#write binary 0 to file
     file.write(struct.pack('B', 0))

@@ -14,23 +14,17 @@ from . import struct_w3d
 
 #TODO 
 
-#set mat alpha dependend on shader.alphaTestEnable
-
-#textures are still created multiple times (e.g. texture.tga.001 etc)
-
 #support for multiple textures for one mesh (also multiple uv maps)
 
-#correct insertion of key frames
-
-#load and create animation data
+#create animation data
 
 #support for 2 bone vertex influences (are they even used?)
 
-#chunk 59 RGBA structs but what for
-#chunk 64 size 4 dont know what this is
-
-#what are chunks 96 97 for? (two additional vertex normals for bump mapping?) seems to be diffuse normals and specular normals
-#but it seems blender does not support that kind of stuff
+# unknown chunks:
+# 	59 RGBA structs
+#	64 size of 4 bytes
+#	96 vertex normals for bump mapping? (specular and diffuse normals)
+#	97 vertex normals for bump mapping? (specular and diffuse normals)
 
 #######################################################################################
 # Basic Methods
@@ -217,9 +211,29 @@ def ReadTimeCodedAnimVector(file, self, chunkEnd):
     if MagicNum == 0:
         MagicNum = 1 #to prevent division by zero
     VectorLen = ReadUnsignedByte(file)
-    Flag = ReadUnsignedByte(file)
-    TimeCodesCount = ReadShort(file) # what is this for? common values: 1, 3, 4, 5, 6, 7, 8, 50, 100, 157
+    Flag = ReadUnsignedByte(file) #is x or y or z or quat
+    TimeCodesCount = ReadShort(file) #number of time codes in this chunk max is numFrames
+    print(MagicNum, VectorLen, TimeCodesCount)
     Pivot = ReadShort(file)
+
+	# size magicNum vecLen	TimeCodesCount  ueberschuss
+	# 16   0        1 		1        		4
+	# 25   256 		1 		1
+	# 28   0   		4 		1        		4
+	# 40   0   		1 		5        		12
+	# 61   256 		1 		75
+	# 64   0   		4 		3        		8
+	# 79   256 		1 		100
+	# 80   0   		4 		4        		8
+	# 100  0   		4 		5        		12
+	# 101  512 		1 		75
+	# 106  256 		1 		157
+	# 135  512 		1 		100
+	# 208  256 		1 		75
+	# 280  256 		4 		100
+	# 368  512 		4 		75
+	# 388  256 		4 		157
+	# 504  512 		4 		100
 
     if VectorLen == 1:
         while file.tell() < chunkEnd:
@@ -246,9 +260,13 @@ def ReadCompressedAnimation(file, self, chunkEnd):
         if chunkType == 641:
             Header = ReadCompressedAnimationHeader(file, subChunkEnd)
             print(Header.hieraName)
+            print(Header.numFrames)
+            print(Header.flavor)
         #elif chunkType == 642:
         #elif chunkType == 643:
         elif chunkType == 644:
+            #print("########")
+            print(chunkSize)
             AnimVectors.append(ReadTimeCodedAnimVector(file, self, subChunkEnd))	
         else:
             self.report({'ERROR'}, "unknown chunktype in CompressedAnimation: %s" % chunkType)
@@ -823,7 +841,6 @@ def ReadMesh(self, file, chunkEnd):
                 print(e)
         elif Chunktype == 80:
             try:
-                print(Chunksize)
                 MeshBumpMaps = ReadBumpMapArray(file, self, subChunkEnd)
                 print("BumpMapArray")
             except:
@@ -900,6 +917,9 @@ def createBox(Box):
 #######################################################################################			
 	
 def LoadTexture(self, givenfilepath, mesh, texName, tex_type):
+    script_directory = os.path.dirname(os.path.abspath(__file__))
+    default_tex = script_directory + "\default_tex.dds"
+
     found_img = False
 
     basename = os.path.splitext(texName)[0]
@@ -915,8 +935,8 @@ def LoadTexture(self, givenfilepath, mesh, texName, tex_type):
     mTex.use_map_alpha = True	
 			
     if found_img == False:
-        tgapath = os.path.dirname(givenfilepath)+"/"+basename+".tga"
-        ddspath = os.path.dirname(givenfilepath)+"/"+basename+".dds"
+        tgapath = os.path.dirname(givenfilepath) + "/" + basename + ".tga"
+        ddspath = os.path.dirname(givenfilepath) + "/" + basename + ".dds"
         img = None
         try:
             img = bpy.data.images.load(tgapath)
@@ -1146,8 +1166,10 @@ def MainImport(givenfilepath, context, self):
         for vm in m.vertMatls:
             mat = bpy.data.materials.new(m.header.meshName + "." + vm.vmName)
             mat.use_shadeless = True
-            mat.use_transparency = True
-            mat.transparency_method = "Z_TRANSPARENCY"
+            if len(m.shaders) > 0:
+                if m.shaders[0].alphaTest == 1:
+                    mat.use_transparency = True
+                    mat.transparency_method = "Z_TRANSPARENCY"
             mat.alpha = vm.vmInfo.translucency
             mat.specular_color = (struct.unpack('B', vm.vmInfo.specular.r)[0], struct.unpack('B', vm.vmInfo.specular.g)[0],
 				struct.unpack('B', vm.vmInfo.specular.b)[0])
@@ -1164,8 +1186,10 @@ def MainImport(givenfilepath, context, self):
         if not m.bumpMaps.normalMap.entryStruct.normalMap == "":
             mat = bpy.data.materials.new(m.header.meshName + ".BumpMaterial")
             mat.use_shadeless = True
-            mat.use_transparency = True
-            mat.transparency_method = "Z_TRANSPARENCY"
+            if len(m.shaders) > 0:
+                if m.shaders[0].alphaTest == 1:
+                    mat.use_transparency = True
+                    mat.transparency_method = "Z_TRANSPARENCY"
             mat.alpha = 0.0
             mesh.materials.append(mat)
 			#to show textures properly first apply the normal texture

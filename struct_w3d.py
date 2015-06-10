@@ -50,7 +50,7 @@ class HierarchyPivot(Struct):
 class Hierarchy(Struct):
     header = HierarchyHeader()
     pivots = []
-    pivot_fixups = []
+    pivot_fixups = [] #array of matrices but with what are they used for?
 	
 #######################################################################################
 # Animation
@@ -180,7 +180,7 @@ class MeshMaterial(Struct):
     vmArgs1 = "" #mapping
 
 class MeshMaterialSetInfo(Struct):
-    passCount = 1
+    passCount = 1 #always 1
     vertMatlCount = 0
     shaderCount = 0
     textureCount = 0
