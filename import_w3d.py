@@ -9,7 +9,7 @@ import math
 import sys
 import bmesh
 from bpy.props import *
-from mathutils import Vector, Quaternion
+from mathutils import Vector, Quaternion, Matrix
 from . import struct_w3d
 
 #TODO 
@@ -215,7 +215,7 @@ def ReadTimeCodedAnimVector(file, self, chunkEnd):
     TimeCodesCount = ReadShort(file) #number of time codes in this chunk max is numFrames
     print(MagicNum, VectorLen, TimeCodesCount)
     Pivot = ReadShort(file)
-
+    # will be (NumTimeCodes * ((VectorLen * sizeof(uint32)) + sizeof(uint32)))
 	# size magicNum vecLen	TimeCodesCount  ueberschuss
 	# 16   0        1 		1        		4
 	# 25   256 		1 		1
@@ -1251,60 +1251,87 @@ def MainImport(givenfilepath, context, self):
     #animation stuff
     if not Animation.header.name == "":	
         pivotName = ""
-        #set end of animation
+        bpy.data.scenes["Scene"].frame_start = 0
         bpy.data.scenes["Scene"].frame_end = Animation.header.numFrames - 1
         for channel in Animation.channels:
-            rest_location = Vector((0, 0, 0))
             if (channel.pivot == 0):
                 continue   #skip roottransform
+            rest_location = Hierarchy.pivots[channel.pivot].position
+            rest_rotation = Hierarchy.pivots[channel.pivot].rotation
             pivot = Hierarchy.pivots[channel.pivot]
-            if not pivotName == pivot.name:
-                if pivot.isBone:
-                    obj = rig.pose.bones[pivot.name]
-                else:
-                    obj = bpy.data.objects[pivot.name]
-                pivotName = pivot.name
+            if pivot.isBone:
+                obj = rig.pose.bones[pivot.name]
+            else:
+                obj = bpy.data.objects[pivot.name]
+            bpy.context.scene.frame_set(0)
+            obj.location = rest_location
+            obj.keyframe_insert(data_path='location', frame = 0) 
+            bpy.context.scene.frame_set(0)
+            obj.rotation_mode = 'QUATERNION'						
+            obj.rotation_quaternion = rest_rotation
+            obj.keyframe_insert(data_path='rotation_quaternion', frame = 0) 		
+			
             # ANIM_CHANNEL_X
-            #if channel.type == 0:   
-            #    #print("x")
-            #    for frame in range(channel.firstFrame, channel.lastFrame):
-            #        if frame == 0:
-            #            print("")   
-            #        else:
-            #            bpy.context.scene.frame_set(frame)  
-            #            obj.location.x = channel.data[frame - channel.firstFrame]
-            #            obj.keyframe_insert(data_path='location', frame = frame) 
+            if channel.type == 0:   
+                print(pivot.name)
+                for frame in range(channel.firstFrame, channel.lastFrame):
+                    bpy.context.scene.frame_set(frame)
+                    obj.location += obj.rotation_quaternion * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))
+					#not working 
+                    #obj.location.x += channel.data[frame - channel.firstFrame]
+                    #obj.location.x = rest_location.x + channel.data[frame - channel.firstFrame]	
+                    #obj.location = rest_rotation * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))
+                    #obj.location += rest_rotation * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))
+                    #obj.location = obj.rotation_quaternion * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))
+                    #obj.location = rest_location + (rest_rotation * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0)))
+					#obj.location.x = rest_location.x + (rest_rotation * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))).x
+					#obj.location = rest_location + (rest_rotation.inverted() * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0)))
+                    #obj.location.x = rest_location.x + (rest_rotation.inverted() * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))).x
+                    
+                    obj.keyframe_insert(data_path='location', frame = frame) 
             # ANIM_CHANNEL_Y
-            #elif channel.type == 1:   
-            #    #print("y")
-            #    for frame in range(channel.firstFrame, channel.lastFrame):
-            #        if frame == 0:
-            #            print("")   
-            #        else:
-            #            bpy.context.scene.frame_set(frame)
-            #            obj.location.y = channel.data[frame - channel.firstFrame]
-            #            obj.keyframe_insert(data_path='location', frame = frame) 			
+            elif channel.type == 1:   
+                for frame in range(channel.firstFrame, channel.lastFrame):
+                    bpy.context.scene.frame_set(frame)
+                    obj.location += obj.rotation_quaternion * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))
+					#not working 
+                    #obj.location.y += channel.data[frame - channel.firstFrame]
+                    #obj.location.y = rest_location.y + channel.data[frame - channel.firstFrame]	
+					#obj.location = rest_rotation * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))
+					#obj.location += rest_rotation * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))
+					#obj.location = obj.rotation_quaternion * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))
+                    #obj.location = rest_location + (rest_rotation * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0)))
+					#obj.location.y = rest_location.y + (rest_rotation * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))).y
+					#obj.location = rest_location + (rest_rotation.inverted() * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0)))
+                    #obj.location.y = rest_location.y + (rest_rotation.inverted() * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))).y
+                   
+                    obj.keyframe_insert(data_path='location', frame = frame) 			
             # ANIM_CHANNEL_Z
-            #elif channel.type == 2:  
-            #    #print("z")
-            #    for frame in range(channel.firstFrame, channel.lastFrame):
-            #        if frame == 0:
-            #            print("")   
-            #        else:
-            #            bpy.context.scene.frame_set(frame)
-            #            obj.location.z = channel.data[frame - channel.firstFrame]
-            #            obj.keyframe_insert(data_path='location', frame = frame) 
+            elif channel.type == 2:  
+                for frame in range(channel.firstFrame, channel.lastFrame):
+                    bpy.context.scene.frame_set(frame)
+                    obj.location += obj.rotation_quaternion * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))
+					#not working 
+                    #obj.location.z += channel.data[frame - channel.firstFrame]
+                    #obj.location.z = rest_location.z + channel.data[frame - channel.firstFrame]	
+					#obj.location = rest_rotation * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))
+					#obj.location += rest_rotation * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))
+					#obj.location = obj.rotation_quaternion * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))
+                    #obj.location = rest_location + (rest_rotation * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame])))
+					#obj.location.z = rest_location.z + (rest_rotation * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))).z
+					#obj.location = rest_location + (rest_rotation.inverted() * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame])))
+                    #obj.location.z = rest_location.z + (rest_rotation.inverted() * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))).z
+                    
+                    obj.keyframe_insert(data_path='location', frame = frame) 
 		
-		    #need to apply the default rotation from frame 0 ??
 			# ANIM_CHANNEL_Q	 .inverted()
-            if channel.type == 6:  
-                print("quaternion")
+            elif channel.type == 6:  
                 datum_rot = obj.rotation_quaternion
                 for frame in range(channel.firstFrame, channel.lastFrame):
                     bpy.context.scene.frame_set(frame)
                     obj.rotation_mode = 'QUATERNION'						
-                    obj.rotation_quaternion = channel.data[frame - channel.firstFrame] 
-                    obj.keyframe_insert(data_path='rotation_quaternion', frame = frame)   
+                    obj.rotation_quaternion = rest_rotation * channel.data[frame - channel.firstFrame]
+                    obj.keyframe_insert(data_path='rotation_quaternion', frame = frame)    
             else:
                 self.report({'ERROR'}, "unsupported channel type: %s" %channel.type)
                 print("unsupported channel type: %s" %channel.type)
