@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 03.06.2015
+#Last Modification 18.06.2015
 #Structs of the W3D Format used in games by Westwood & EA
 from mathutils import Vector, Quaternion
 
@@ -267,8 +267,8 @@ class AABTreeHeader(Struct):
 class AABTreeNode(Struct):
     min = Vector((0.0, 0.0, 0.0))
     max = Vector((0.0, 0.0, 0.0))
-    FrontOrPoly0 = 0
-    BackOrPolyCount = 0
+    frontOrPoly0 = 0
+    backOrPolyCount = 0
 
 class MeshAABTree(Struct):
     header = AABTreeHeader()
@@ -297,7 +297,6 @@ class MeshHeader(Struct):
     maxCorner = Vector((0.0, 0.0 ,0.0))
     sphCenter = Vector((0.0, 0.0 ,0.0))
     sphRadius = 0.0
-    userText  = ""
 
 class Mesh(Struct):
     header = MeshHeader()
@@ -305,6 +304,7 @@ class Mesh(Struct):
     normals = []
     vertInfs = []
     faces = []
+    userText  = ""
     shadeIds = []
     matInfo = MeshMaterialSetInfo()
     matlheader = []
