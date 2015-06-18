@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 03.06.2015
+#Last Modification 18.06.2015
 #Loads the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -14,11 +14,19 @@ from . import struct_w3d
 
 #TODO 
 
-#support for multiple textures for one mesh (also multiple uv maps)
+# make fx textures with alpha use but depend on which value?
 
-#create animation data
+# create animation data
 
-#support for 2 bone vertex influences (are they even used?)
+# calculate only the keyframes for each pivot??
+
+# read compressed animation data and create it
+
+# what are aabtrees for and how do they work
+
+# support for multiple textures for one mesh (also multiple uv maps)
+
+# support for 2 bone vertex influences (are they even used?)
 
 # unknown chunks:
 # 	59 RGBA structs
@@ -259,13 +267,10 @@ def ReadCompressedAnimation(file, self, chunkEnd):
         subChunkEnd = file.tell() + chunkSize
         if chunkType == 641:
             Header = ReadCompressedAnimationHeader(file, subChunkEnd)
-            print(Header.hieraName)
-            print(Header.numFrames)
-            print(Header.flavor)
         #elif chunkType == 642:
         #elif chunkType == 643:
         elif chunkType == 644:
-            #print("########")
+            print("########")
             print(chunkSize)
             AnimVectors.append(ReadTimeCodedAnimVector(file, self, subChunkEnd))	
         else:
@@ -643,11 +648,11 @@ def ReadAABTreePolyIndices(file, chunkEnd):
 def ReadAABTreeNodes(file, chunkEnd):
     nodes = []
     while file.tell() < chunkEnd:
-        min = ReadVector(file)
-        max = ReadVector(file)
+        Min = ReadVector(file)
+        Max = ReadVector(file)
         FrontOrPoly0 = ReadLong(file)
         BackOrPolyCount = ReadLong(file)
-        nodes.append(struct_w3d.AABTreeNode(min = min, max = max, FrontOrPoly0 = FrontOrPoly0, BackOrPolyCount = BackOrPolyCount))
+        nodes.append(struct_w3d.AABTreeNode(min = Min, max = Max, frontOrPoly0 = FrontOrPoly0, backOrPolyCount = BackOrPolyCount))
     return nodes
 
 #Axis-Aligned-Bounding-Box tree
@@ -885,35 +890,9 @@ def ReadMesh(self, file, chunkEnd):
 				faces = MeshFaces, userText = MeshUsertext, shadeIds = MeshShadeIds, matInfo = MeshMaterialInfo, 
 				matlheader = [], shaders = MeshShaders, vertMatls = MeshVerticeMats, textures = MeshTextures, 
 				matlPass = MeshMaterialPass, bumpMaps = MeshBumpMaps, aabtree = MeshAABTree)
-
-#######################################################################################
-# create Box
-#######################################################################################		
-		
-def createBox(Box):	
-    name = "BOUNDINGBOX" #to keep name always equal (sometimes it is "BOUNDING BOX")
-    x = Box.extend[0]/2
-    y = Box.extend[1]/2
-    z = Box.extend[2]
-
-    verts = [(x, y, z), (-x, y, z), (-x, -y, z), (x, -y, z), (x, y, 0), (-x, y, 0), (-x, -y, 0), (x, -y, 0)]
-    faces = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)]
-
-    cube = bpy.data.meshes.new(name)
-    box = bpy.data.objects.new(name, cube)
-    mat = bpy.data.materials.new("BOUNDINGBOX.Material")
-    mat.use_shadeless = True
-    mat.diffuse_color = (struct.unpack('B', Box.color.r)[0], struct.unpack('B', Box.color.g)[0], struct.unpack('B', Box.color.b)[0])
-    cube.materials.append(mat)
-    box.location = Box.center
-    bpy.context.scene.objects.link(box)
-    cube.from_pydata(verts, [], faces)
-    cube.update(calc_edges = True)
-    #set render mode to wireframe
-    box.draw_type = 'WIRE' 
 	
 #######################################################################################
-# Texture
+# loadTexture
 #######################################################################################			
 	
 def LoadTexture(self, givenfilepath, mesh, texName, tex_type):
@@ -946,6 +925,7 @@ def LoadTexture(self, givenfilepath, mesh, texName, tex_type):
             except:
                 self.report({'ERROR'}, "Cannot load image " + basename) 			
                 print("!!! Image file not found " + basename)
+                img = bpy.data.images.load(default_tex)
 
         cTex = bpy.data.textures.new(texName, type = 'IMAGE')
         cTex.image = img
@@ -968,7 +948,7 @@ def LoadTexture(self, givenfilepath, mesh, texName, tex_type):
        mTex.diffuse_color_factor = 0.0
 				
 #######################################################################################
-# Skeleton / Armature 
+# loadSkeleton 
 #######################################################################################			
 				
 def LoadSKL(givenfilepath, self, filename):
@@ -994,8 +974,44 @@ def LoadSKL(givenfilepath, self, filename):
         Chunknumber += 1
     file.close()
     return Hierarchy
+	
+#######################################################################################
+# load bone mesh file
+#######################################################################################
 
-def createArmature(Hierarchy, amtName):
+def loadBoneMesh(self, filepath):
+    file = open(filepath,"rb")
+    file.seek(0,2)
+    filesize = file.tell()
+    file.seek(0,0)
+    Mesh = struct_w3d.Mesh()
+	
+    while file.tell() < filesize:
+        Chunktype = ReadLong(file)
+        Chunksize =  GetChunkSize(ReadLong(file))
+        chunkEnd = file.tell() + Chunksize
+        if Chunktype == 0:
+            Mesh = ReadMesh(self, file, chunkEnd)
+        else:
+            file.seek(Chunksize,1)
+    file.close()
+	
+    Vertices = Mesh.verts
+    Faces = []
+    for f in Mesh.faces:
+        Faces.append(f.vertIds)
+
+    #create the mesh
+    mesh = bpy.data.meshes.new(Mesh.header.containerName)
+    mesh.from_pydata(Vertices,[],Faces)
+    mesh_ob = bpy.data.objects.new(Mesh.header.meshName, mesh)
+    return mesh 
+	
+#######################################################################################
+# createArmature
+#######################################################################################			
+	
+def createArmature(self, Hierarchy, amtName):
     #the bones are just spheres, because if tails are created, the rotation of the bone is corrupted 
     amt = bpy.data.armatures.new(Hierarchy.header.name)
     amt.show_names = True
@@ -1003,14 +1019,13 @@ def createArmature(Hierarchy, amtName):
     rig.location = Hierarchy.header.centerPos
     rig.rotation_mode = 'QUATERNION'
     rig.show_x_ray = True
+    rig.track_axis = "POS_X"
     bpy.context.scene.objects.link(rig) # Link the object to the active scene
     bpy.context.scene.objects.active = rig
     bpy.ops.object.mode_set(mode = 'EDIT')
     bpy.context.scene.update()
 
 	#create the bones from the pivots
-    root = Vector((0.0, 0.0, 0.0))
-	
     for pivot in Hierarchy.pivots:			
         if pivot.isBone:
             bone = amt.edit_bones.new(pivot.name)
@@ -1018,13 +1033,18 @@ def createArmature(Hierarchy, amtName):
                 parent_pivot =  Hierarchy.pivots[pivot.parentID]
                 parent = amt.edit_bones[parent_pivot.name]
                 bone.parent = parent
-            bone.head = root
-            bone.tail = root + Vector((0.0, 0.40, 0.0))
+                size = pivot.position.x
+            bone.head = Vector((0.0, 0.0, 0.0))
+			#has to point in y direction that the rotation is applied correctly
+            bone.tail = Vector((0.0, 0.1, 0.0))
 
     #pose the bones
     bpy.ops.object.mode_set(mode = 'POSE')
+    
+    script_directory = os.path.dirname(os.path.abspath(__file__))
+    bone_file = script_directory + "\\bone.W3D"
 	
-    bone_shape = bpy.ops.mesh.primitive_uv_sphere_add(location = (0, 0, 0))
+    bone_shape = loadBoneMesh(self, bone_file)
 
     for pivot in Hierarchy.pivots:
         if pivot.isBone:
@@ -1033,15 +1053,113 @@ def createArmature(Hierarchy, amtName):
             bone.rotation_mode = 'QUATERNION'
             bone.rotation_euler = pivot.eulerAngles
             bone.rotation_quaternion = pivot.rotation
-            bone.custom_shape = bpy.data.objects["Sphere"]
+            #bpy.data.objects["Bone"].scale = (4, 4, 4)
+            bone.custom_shape = bpy.data.objects["Bone"]
 
     bpy.ops.object.mode_set(mode = 'OBJECT')
 	
-	#delete the sphere afterwards
+	#delete the mesh afterwards
     for ob in bpy.context.scene.objects:
-        ob.select = ob.type == 'MESH' and ob.name.startswith("Sphere")
+        ob.select = ob.type == 'MESH' and ob.name.startswith("Bone")
         bpy.ops.object.delete()
+    rig.hide = True
     return rig
+	
+#######################################################################################
+# createAnimation
+#######################################################################################		
+
+def createAnimation(self, Animation, Hierarchy, rig):
+    bpy.data.scenes["Scene"].render.fps = Animation.header.frameRate
+    bpy.data.scenes["Scene"].frame_start = 1
+    bpy.data.scenes["Scene"].frame_end = Animation.header.numFrames
+	
+	#create the data
+    translation_data = []
+    for pivot in range (0, len(Hierarchy.pivots)):
+        pivot = []
+        for frame in range (0, Animation.header.numFrames):
+            frame = []
+            frame.append(Vector((0.0, 0.0, 0.0)))
+            frame.append(Quaternion((0.0, 0.0, 0.0, 0.0)))
+            pivot.append(frame)
+        translation_data.append(pivot)
+	
+    for channel in Animation.channels:
+        if (channel.pivot == 0):
+            continue   #skip roottransform
+        rest_rotation = Hierarchy.pivots[channel.pivot].rotation
+        pivot = Hierarchy.pivots[channel.pivot]
+        if pivot.isBone:
+            obj = rig.pose.bones[pivot.name]
+        else:
+            obj = bpy.data.objects[pivot.name]			
+			
+        # ANIM_CHANNEL_X
+        if channel.type == 0:   
+            for frame in range(channel.firstFrame, channel.lastFrame):
+                vec = Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))	
+                translation_data[channel.pivot][frame][0] += vec		
+        # ANIM_CHANNEL_Y
+        elif channel.type == 1:   
+            for frame in range(channel.firstFrame, channel.lastFrame):
+                vec = Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))			
+                translation_data[channel.pivot][frame][0] += vec				
+        # ANIM_CHANNEL_Z
+        elif channel.type == 2:  
+            for frame in range(channel.firstFrame, channel.lastFrame):
+                vec = Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))
+                translation_data[channel.pivot][frame][0] += vec	
+		
+	    # ANIM_CHANNEL_Q	
+        elif channel.type == 6:  
+            for frame in range(channel.firstFrame, channel.lastFrame):				
+                obj.rotation_mode = 'QUATERNION'						
+                obj.rotation_quaternion = rest_rotation * channel.data[frame - channel.firstFrame]
+                obj.keyframe_insert(data_path='rotation_quaternion', frame = frame)  
+        else:
+            self.report({'ERROR'}, "unsupported channel type: %s" %channel.type)
+            print("unsupported channel type: %s" %channel.type)
+
+    for pivot in range (1, len(Hierarchy.pivots)):
+        rest_location = Hierarchy.pivots[pivot].position
+        rest_rotation = Hierarchy.pivots[channel.pivot].rotation
+        if Hierarchy.pivots[pivot].isBone:
+            obj = rig.pose.bones[Hierarchy.pivots[pivot].name]
+        else:
+            obj = bpy.data.objects[Hierarchy.pivots[pivot].name]
+			
+        for frame in range (0, Animation.header.numFrames):
+            if not translation_data[pivot][frame][0] == Vector((0.0, 0.0, 0.0)):
+                bpy.context.scene.frame_set(frame)	
+                obj.location = rest_location + (obj.rotation_quaternion * translation_data[pivot][frame][0])
+                obj.keyframe_insert(data_path='location', frame = frame) 
+
+#######################################################################################
+# create Box
+#######################################################################################		
+		
+def createBox(Box):	
+    name = "BOUNDINGBOX" #to keep name always equal (sometimes it is "BOUNDING BOX")
+    x = Box.extend[0]/2
+    y = Box.extend[1]/2
+    z = Box.extend[2]
+
+    verts = [(x, y, z), (-x, y, z), (-x, -y, z), (x, -y, z), (x, y, 0), (-x, y, 0), (-x, -y, 0), (x, -y, 0)]
+    faces = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)]
+
+    cube = bpy.data.meshes.new(name)
+    box = bpy.data.objects.new(name, cube)
+    mat = bpy.data.materials.new("BOUNDINGBOX.Material")
+    mat.use_shadeless = True
+    mat.diffuse_color = (struct.unpack('B', Box.color.r)[0], struct.unpack('B', Box.color.g)[0], struct.unpack('B', Box.color.b)[0])
+    cube.materials.append(mat)
+    box.location = Box.center
+    bpy.context.scene.objects.link(box)
+    cube.from_pydata(verts, [], faces)
+    cube.update(calc_edges = True)
+    #set render mode to wireframe
+    box.draw_type = 'WIRE' 	
 	
 #######################################################################################
 # Main Import
@@ -1129,7 +1247,7 @@ def MainImport(givenfilepath, context, self):
                 rig = obj
                 found = True
         if not found:
-            rig = createArmature(Hierarchy, amtName)
+            rig = createArmature(self, Hierarchy, amtName)
 
     for m in Meshes:	
         Vertices = m.verts
@@ -1161,6 +1279,11 @@ def MainImport(givenfilepath, context, self):
         bm.to_mesh(mesh)
 
         mesh_ob = bpy.data.objects.new(m.header.meshName, mesh)
+        mesh_ob['userText'] = m.userText
+
+		#show the bounding boxes
+        #mesh_ob.show_bounds = True
+        #mesh_ob.draw_bounds_type = "BOX"
 		
 		#create the material for each mesh because the same material could be used with multiple textures
         for vm in m.vertMatls:
@@ -1209,6 +1332,9 @@ def MainImport(givenfilepath, context, self):
 			#        163840 -> skin - cast shadow
             #        172032 -> skin - two sided - cast shadow
             type = m.header.attrs
+            if type == 8192 or type == 139264:
+                mesh.show_double_sided = True
+				
             if type == 0 or type == 8192 or type == 32768:
                 for pivot in Hierarchy.pivots:
                     if m.header.meshName == pivot.name:
@@ -1250,91 +1376,7 @@ def MainImport(givenfilepath, context, self):
 
     #animation stuff
     if not Animation.header.name == "":	
-        pivotName = ""
-        bpy.data.scenes["Scene"].frame_start = 0
-        bpy.data.scenes["Scene"].frame_end = Animation.header.numFrames - 1
-        for channel in Animation.channels:
-            if (channel.pivot == 0):
-                continue   #skip roottransform
-            rest_location = Hierarchy.pivots[channel.pivot].position
-            rest_rotation = Hierarchy.pivots[channel.pivot].rotation
-            pivot = Hierarchy.pivots[channel.pivot]
-            if pivot.isBone:
-                obj = rig.pose.bones[pivot.name]
-            else:
-                obj = bpy.data.objects[pivot.name]
-            bpy.context.scene.frame_set(0)
-            obj.location = rest_location
-            obj.keyframe_insert(data_path='location', frame = 0) 
-            bpy.context.scene.frame_set(0)
-            obj.rotation_mode = 'QUATERNION'						
-            obj.rotation_quaternion = rest_rotation
-            obj.keyframe_insert(data_path='rotation_quaternion', frame = 0) 		
-			
-            # ANIM_CHANNEL_X
-            if channel.type == 0:   
-                print(pivot.name)
-                for frame in range(channel.firstFrame, channel.lastFrame):
-                    bpy.context.scene.frame_set(frame)
-                    obj.location += obj.rotation_quaternion * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))
-					#not working 
-                    #obj.location.x += channel.data[frame - channel.firstFrame]
-                    #obj.location.x = rest_location.x + channel.data[frame - channel.firstFrame]	
-                    #obj.location = rest_rotation * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))
-                    #obj.location += rest_rotation * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))
-                    #obj.location = obj.rotation_quaternion * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))
-                    #obj.location = rest_location + (rest_rotation * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0)))
-					#obj.location.x = rest_location.x + (rest_rotation * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))).x
-					#obj.location = rest_location + (rest_rotation.inverted() * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0)))
-                    #obj.location.x = rest_location.x + (rest_rotation.inverted() * Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))).x
-                    
-                    obj.keyframe_insert(data_path='location', frame = frame) 
-            # ANIM_CHANNEL_Y
-            elif channel.type == 1:   
-                for frame in range(channel.firstFrame, channel.lastFrame):
-                    bpy.context.scene.frame_set(frame)
-                    obj.location += obj.rotation_quaternion * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))
-					#not working 
-                    #obj.location.y += channel.data[frame - channel.firstFrame]
-                    #obj.location.y = rest_location.y + channel.data[frame - channel.firstFrame]	
-					#obj.location = rest_rotation * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))
-					#obj.location += rest_rotation * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))
-					#obj.location = obj.rotation_quaternion * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))
-                    #obj.location = rest_location + (rest_rotation * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0)))
-					#obj.location.y = rest_location.y + (rest_rotation * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))).y
-					#obj.location = rest_location + (rest_rotation.inverted() * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0)))
-                    #obj.location.y = rest_location.y + (rest_rotation.inverted() * Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))).y
-                   
-                    obj.keyframe_insert(data_path='location', frame = frame) 			
-            # ANIM_CHANNEL_Z
-            elif channel.type == 2:  
-                for frame in range(channel.firstFrame, channel.lastFrame):
-                    bpy.context.scene.frame_set(frame)
-                    obj.location += obj.rotation_quaternion * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))
-					#not working 
-                    #obj.location.z += channel.data[frame - channel.firstFrame]
-                    #obj.location.z = rest_location.z + channel.data[frame - channel.firstFrame]	
-					#obj.location = rest_rotation * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))
-					#obj.location += rest_rotation * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))
-					#obj.location = obj.rotation_quaternion * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))
-                    #obj.location = rest_location + (rest_rotation * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame])))
-					#obj.location.z = rest_location.z + (rest_rotation * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))).z
-					#obj.location = rest_location + (rest_rotation.inverted() * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame])))
-                    #obj.location.z = rest_location.z + (rest_rotation.inverted() * Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))).z
-                    
-                    obj.keyframe_insert(data_path='location', frame = frame) 
-		
-			# ANIM_CHANNEL_Q	 .inverted()
-            elif channel.type == 6:  
-                datum_rot = obj.rotation_quaternion
-                for frame in range(channel.firstFrame, channel.lastFrame):
-                    bpy.context.scene.frame_set(frame)
-                    obj.rotation_mode = 'QUATERNION'						
-                    obj.rotation_quaternion = rest_rotation * channel.data[frame - channel.firstFrame]
-                    obj.keyframe_insert(data_path='rotation_quaternion', frame = frame)    
-            else:
-                self.report({'ERROR'}, "unsupported channel type: %s" %channel.type)
-                print("unsupported channel type: %s" %channel.type)
+        createAnimation(self, Animation, Hierarchy, rig)
 	
     #to render the loaded textures				
     bpy.context.scene.game_settings.material_mode = 'GLSL'
