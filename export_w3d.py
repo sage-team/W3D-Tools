@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 03.06.2015
+#Last Modification 18.06.2015
 #Exports the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -13,6 +13,8 @@ from mathutils import Vector, Quaternion
 from . import struct_w3d
 
 #TODO 
+
+# write AABTree to file
 
 # change test if we need to write normal map chunk
 
@@ -140,6 +142,7 @@ def WritePivotFixups(file, size, pivot_fixups):
         WriteVector(file, fixup)
 
 def WriteHierarchy(file, hierarchy):
+    print("### NEW HIERARCHY: ###")
     WriteLong(file, 256) #chunktype
     
     headerSize = 36
@@ -149,7 +152,6 @@ def WriteHierarchy(file, hierarchy):
 
     WriteLong(file, size) #chunksize
 	
-    print("### NEW HIERARCHY: ###")
     WriteHierarchyHeader(file, headerSize, hierarchy.header)
     print("Header")
     WritePivots(file, pivotsSize, hierarchy.pivots)
@@ -158,6 +160,86 @@ def WriteHierarchy(file, hierarchy):
     #if pivotFixupsSize > 0:
     #    WritePivotFixups(file, pivotFixupsSize, hierarchy.pivot_fixups)
     #    print("Pivot Fixups")
+	
+#######################################################################################
+# Animation
+#######################################################################################
+	
+def WriteAnimationHeader(file, size, header):
+    WriteLong(file, 513) #chunktype
+    WriteLong(file, size) #chunksize
+
+    WriteLong(file, MakeVersion(header.version))
+    WriteFixedString(file, header.name)
+    WriteFixedString(file, header.hieraName)
+    WriteLong(file, header.numFrames)
+    WriteLong(file, header.frameRate)
+
+def WriteAnimationChannel(file, channel):
+    WriteLong(file, 514) #chunktype
+    size = 12 + (len(channel.data) * channel.vectorLen) * 4
+    WriteLong(file, size) #chunksize
+	
+    WriteShort(file, channel.firstFrame)
+    WriteShort(file, channel.lastFrame)
+    WriteShort(file, channel.vectorLen)
+    WriteShort(file, channel.type)
+    WriteShort(file, channel.pivot)
+    WriteShort(file, channel.pad)
+
+    if channel.vectorLen == 1:
+        for f in channel.data:
+            WriteFloat(file, f)
+    elif channel.vectorLen == 4:
+        for quat in channel.data:
+            WriteQuaternion(file, quat)
+
+def WriteAnimation(file, animation):
+    print("### NEW ANIMATION: ###")
+    WriteLong(file, 512) #chunktype
+	
+    headerSize = 44
+    channelsSize = len(animation.channels) * (12 + HEAD)
+    for channel in channels:
+        channelsSize += (len(channel.data) * channel.vectorLen) * 4
+    size = HEAD + headerSize + channelsSize		
+	
+    WriteLong(file, size) #chunksize	
+	
+    WriteAnimationHeader(file, headerSize, animation.header)
+    print("Header")
+    for channel in animation.channels:
+        WriteAnimationChannel(file, channel)
+        print("Channel")
+			
+def WriteCompressedAnimationHeader(file, size, header):
+    WriteLong(file, 641) #chunktype
+    WriteLong(file, size) #chunksize
+
+    WriteLong(file, MakeVersion(header.version))
+    WriteFixedString(file, header.name)
+    WriteFixedString(file, header.hieraName)
+    WriteLong(file, header.numFrames)
+    WriteShort(file, header.frameRate)
+    WriteShort(file, header.flavor)
+		
+def WriteCompressedAnimation(file, compAnimation):
+    print("### NEW COMPRESSED ANIMATION: ###")
+    WriteLong(file, 640) #chunktype
+	
+    headerSize = 44
+    vectorsSize = 0
+    #for vec in compAnimation.animVectors:
+        #vectorsSize += HEAD + 
+    size = HEAD + headerSize #+ vectorsSize
+	
+    WriteLong(file, size) #chunksize
+
+    WriteCompressedAnimationHeader(file, headerSize, compAnimation.header)	
+    print("Header")
+    #for vec in compAnimation.animVectors:
+        #WriteTimeCodedAnimVector(file, vec)
+        #print("AnimVector")
 	
 #######################################################################################
 # HLod
@@ -195,6 +277,7 @@ def WriteHLodArray(file, size, lodArray, headerSize, subObjectSize):
         WriteHLodSubObject(file, subObjectSize, object)
 
 def WriteHLod(file, hlod):
+    print("### NEW HLOD: ###")
     WriteLong(file, 1792) #chunktype
 	
     headerSize = 40
@@ -205,7 +288,6 @@ def WriteHLod(file, hlod):
 	
     WriteLong(file, size) #chunksize
 	
-    print("### NEW HLOD: ###")
     WriteHLodHeader(file, headerSize, hlod.header)
     print("Header")
     WriteHLodArray(file, arraySize, hlod.lodArray, arrayHeaderSize, subObjectSize)
@@ -540,9 +622,6 @@ def CalculateMeshSphere(mesh, Header):
             delta = (curr_dist - radius)/2
             radius += delta
             m += (Vector(v.co.xyz - m)).normalized() * delta  	 	
-    print("#######")					
-    print(m)
-    print(radius)
     Header.sphCenter = m
     Header.sphRadius = radius
 	
@@ -581,6 +660,9 @@ def WriteMesh(file, mesh):
     vertSize = len(mesh.verts) * 12
     normSize = len(mesh.normals) * 12
     faceSize = len(mesh.faces) * 32
+    userTextSize = 0
+    if not mesh.userText ==  "":
+        userTextSize = len(mesh.userText) + 1
     infSize = len(mesh.vertInfs) * 8
     matSetInfoSize = 16
     matArraySize = HEAD
@@ -610,6 +692,8 @@ def WriteMesh(file, mesh):
     size += HEAD + vertSize 
     size += HEAD + normSize 
     size += HEAD + faceSize 
+    if not mesh.userText ==  "":
+        size += HEAD + userTextSize
     if len(mesh.vertInfs) > 0:
         size += HEAD + infSize 
     size += HEAD + matSetInfoSize 
@@ -634,6 +718,11 @@ def WriteMesh(file, mesh):
     print("Normals")
     WriteMeshFaceArray(file, faceSize, mesh.faces)
     print("Faces")
+    if not mesh.userText ==  "":
+        WriteLong(file, 12) #chunktype
+        WriteLong(file, userTextSize) #chunksize
+        WriteString(file, mesh.userText)
+        print("UserText")
     if len(mesh.vertInfs) > 0:
         WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
         print("Vertex Influences")
@@ -737,27 +826,10 @@ def MainExport(givenfilepath, self, context):
             Mesh.vertInfs = []
             group_lookup = {g.index: g.name for g in mesh_ob.vertex_groups}
             groups = {name: [] for name in group_lookup.values()}
-            min = Vector((0.0, 0.0, 0.0))
-            max = Vector((0.0, 0.0, 0.0))
             for v in mesh.vertices:
                 verts.append(v.co.xyz)
                 normals.append(v.normal)
                 Mesh.matlPass.txStage.txCoords.append((0.0, 0.0)) #just to fill the array 
-				
-				#min and max of the mesh
-                if (v.co[0] < min[0]):
-                    min[0] = v.co[0]
-                if (v.co[1] < min[1]):
-                    min[1] = v.co[1]
-                if (v.co[2] < min[2]):
-                    min[2] = v.co[2]
-					
-                if (v.co[0] > max[0]):
-                    max[0] = v.co[0]
-                if (v.co[1] > max[1]):
-                    max[1] = v.co[1]
-                if (v.co[2] > max[2]):
-                    max[2] = v.co[2]
 				
 				#vertex influences
                 vertInf = struct_w3d.MeshVertexInfluences()
@@ -788,8 +860,8 @@ def MainExport(givenfilepath, self, context):
 			
             Mesh.verts = verts
             Mesh.normals = normals
-            Header.minCorner = min
-            Header.maxCorner =  max
+            Header.minCorner = Vector((mesh_ob.bound_box[0][0], mesh_ob.bound_box[0][1], mesh_ob.bound_box[0][2]))
+            Header.maxCorner =  Vector((mesh_ob.bound_box[6][0], mesh_ob.bound_box[6][1], mesh_ob.bound_box[6][2]))
 
             for face in mesh.polygons:
                 triangle = struct_w3d.MeshFace()
@@ -797,6 +869,11 @@ def MainExport(givenfilepath, self, context):
                 triangle.normal = face.normal
                 faces.append(triangle)
             Mesh.faces = faces
+			
+            try:
+                Mesh.userText = mesh_ob['userText'] 
+            except:
+                print("no userText")
 			
             Header.faceCount = len(faces)
 			
@@ -839,7 +916,7 @@ def MainExport(givenfilepath, self, context):
                                 Header.vertChannelCount = 99
                                 Mesh.bumpMaps.normalMap.entryStruct.normalMap = tex.name
                             else:
-                                Mesh.bumpMaps.normalMap.entryStruct.diffuseTexName = tex.name				
+                                Mesh.bumpMaps.normalMap.entryStruct.diffuseTexName = tex.name	
                 else:
                     Mesh.matInfo.vertMatlCount += 1
                     meshMaterial = struct_w3d.MeshMaterial()
