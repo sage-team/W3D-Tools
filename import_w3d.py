@@ -18,7 +18,9 @@ from . import struct_w3d
 
 # create animation data
 
-# calculate only the keyframes for each pivot??
+# support animated textures
+
+# calculate only the keyframes for each pivot at animation import ??
 
 # read compressed animation data and create it
 
@@ -27,6 +29,8 @@ from . import struct_w3d
 # support for multiple textures for one mesh (also multiple uv maps)
 
 # support for 2 bone vertex influences (are they even used?)
+
+# test normal/bump map support
 
 # unknown chunks:
 # 	59 RGBA structs
@@ -1213,6 +1217,9 @@ def MainImport(givenfilepath, context, self):
             file.seek(Chunksize,1)
 
     file.close()
+	
+    # set the lamp to sun mode
+    bpy.data.lamps["Lamp"].type = "SUN"
 
     ##create box 
     if not Box.name == "":
@@ -1308,7 +1315,7 @@ def MainImport(givenfilepath, context, self):
         #test if mesh has a normal map (if it has the diffuse texture is also stored there and it has no standard material)
         if not m.bumpMaps.normalMap.entryStruct.normalMap == "":
             mat = bpy.data.materials.new(m.header.meshName + ".BumpMaterial")
-            mat.use_shadeless = True
+            mat.use_shadeless = False
             if len(m.shaders) > 0:
                 if m.shaders[0].alphaTest == 1:
                     mat.use_transparency = True
