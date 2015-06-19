@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 18.06.2015
+#Last Modification 19.06.2015
 #Loads the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -26,11 +26,11 @@ from . import struct_w3d
 
 # what are aabtrees for and how do they work
 
+# what are shade indices and how do they work
+
 # support for multiple textures for one mesh (also multiple uv maps)
 
-# support for 2 bone vertex influences (are they even used?)
-
-# test normal/bump map support
+# support for 2 bone vertex influences (are they even used?) (mucavtroll)
 
 # unknown chunks:
 # 	59 RGBA structs
@@ -899,7 +899,7 @@ def ReadMesh(self, file, chunkEnd):
 # loadTexture
 #######################################################################################			
 	
-def LoadTexture(self, givenfilepath, mesh, texName, tex_type):
+def LoadTexture(self, givenfilepath, mesh, texName, tex_type, destBlend):
     script_directory = os.path.dirname(os.path.abspath(__file__))
     default_tex = script_directory + "\default_tex.dds"
 
@@ -915,7 +915,7 @@ def LoadTexture(self, givenfilepath, mesh, texName, tex_type):
 
     # Create texture slot in material
     mTex = mesh.materials[0].texture_slots.add()
-    mTex.use_map_alpha = True	
+    mTex.use_map_alpha = True
 			
     if found_img == False:
         tgapath = os.path.dirname(givenfilepath) + "/" + basename + ".tga"
@@ -933,6 +933,11 @@ def LoadTexture(self, givenfilepath, mesh, texName, tex_type):
 
         cTex = bpy.data.textures.new(texName, type = 'IMAGE')
         cTex.image = img
+
+        if destBlend == 0:
+            cTex.use_alpha = True
+        else:	
+            cTex.use_alpha = False
 		
         if tex_type == "normal":
             cTex.use_normal_map = True
@@ -1293,6 +1298,7 @@ def MainImport(givenfilepath, context, self):
         #mesh_ob.draw_bounds_type = "BOX"
 		
 		#create the material for each mesh because the same material could be used with multiple textures
+        destBlend = 0
         for vm in m.vertMatls:
             mat = bpy.data.materials.new(m.header.meshName + "." + vm.vmName)
             mat.use_shadeless = True
@@ -1300,6 +1306,10 @@ def MainImport(givenfilepath, context, self):
                 if m.shaders[0].alphaTest == 1:
                     mat.use_transparency = True
                     mat.transparency_method = "Z_TRANSPARENCY"
+                if m.shaders[0].destBlend == 1:
+                    mat.use_transparency = True
+                    mat.transparency_method = "Z_TRANSPARENCY"
+                    destBlend = 1
             mat.alpha = vm.vmInfo.translucency
             mat.specular_color = (struct.unpack('B', vm.vmInfo.specular.r)[0], struct.unpack('B', vm.vmInfo.specular.g)[0],
 				struct.unpack('B', vm.vmInfo.specular.b)[0])
@@ -1310,7 +1320,7 @@ def MainImport(givenfilepath, context, self):
             mesh.materials.append(mat)
 			
         for tex in m.textures:
-            LoadTexture(self, givenfilepath, mesh, tex.name, "diffuse")
+            LoadTexture(self, givenfilepath, mesh, tex.name, "diffuse", destBlend)
 			
         #test if mesh has a normal map (if it has the diffuse texture is also stored there and it has no standard material)
         if not m.bumpMaps.normalMap.entryStruct.normalMap == "":
@@ -1324,9 +1334,9 @@ def MainImport(givenfilepath, context, self):
             mesh.materials.append(mat)
 			#to show textures properly first apply the normal texture
             if not m.bumpMaps.normalMap.entryStruct.normalMap == "":
-                LoadTexture(self, givenfilepath, mesh, m.bumpMaps.normalMap.entryStruct.normalMap, "normal")
+                LoadTexture(self, givenfilepath, mesh, m.bumpMaps.normalMap.entryStruct.normalMap, "normal", destBlend)
             if not m.bumpMaps.normalMap.entryStruct.diffuseTexName == "":
-                LoadTexture(self, givenfilepath, mesh, m.bumpMaps.normalMap.entryStruct.diffuseTexName, "diffuse")
+                LoadTexture(self, givenfilepath, mesh, m.bumpMaps.normalMap.entryStruct.diffuseTexName, "diffuse", destBlend)
 
         #hierarchy stuff
         if Hierarchy.header.pivotCount > 0:
