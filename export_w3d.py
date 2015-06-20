@@ -754,7 +754,6 @@ def MainExport(givenfilepath, self, context):
     print("Run Export")
     HLod = struct_w3d.HLod()
     HLod.lodArray.subObjects = []
-	
     Hierarchy = struct_w3d.Hierarchy()
 	
     roottransform = struct_w3d.HierarchyPivot()
@@ -806,6 +805,8 @@ def MainExport(givenfilepath, self, context):
         else:
             Mesh = struct_w3d.Mesh()
             Header = struct_w3d.MeshHeader()
+            Mesh.aabtree = struct_w3d.MeshAABTree()
+            Mesh.aabtree.header = struct_w3d.AABTreeHeader()
             Mesh.bumpMaps = struct_w3d.MeshBumpMapArray()
             Mesh.matInfo = struct_w3d.MeshMaterialSetInfo()			
 		
@@ -876,6 +877,7 @@ def MainExport(givenfilepath, self, context):
                 print("no userText")
 			
             Header.faceCount = len(faces)
+            Mesh.aabtree.header.polyCount = len(faces)
 			
 		    #uv coords
             bm = bmesh.new()
@@ -906,6 +908,9 @@ def MainExport(givenfilepath, self, context):
 				
             Mesh.vertMatls = [] 
             Mesh.textures = [] 
+            meshMaterial = struct_w3d.MeshMaterial()
+            vertexMaterial = struct_w3d.VertexMaterial()
+			
             for mat in mesh.materials:
                 matName = (os.path.splitext(os.path.basename(mat.name))[1])[1:]
                 if matName == "BumpMaterial":
@@ -919,11 +924,11 @@ def MainExport(givenfilepath, self, context):
                                 Mesh.bumpMaps.normalMap.entryStruct.diffuseTexName = tex.name	
                 else:
                     Mesh.matInfo.vertMatlCount += 1
-                    meshMaterial = struct_w3d.MeshMaterial()
-        
                     meshMaterial.vmName = matName
-                    meshVMInfo = struct_w3d.VertexMaterial()
-                    meshMaterial.vmInfo = meshVMInfo
+                    vertexMaterial.ambient = struct_w3d.RGBA(r = 255, g = 255, b = 255, a = 255)
+                    vertexMaterial.diffuse = struct_w3d.RGBA(r = int(mat.diffuse_color.r*255), g = int(mat.diffuse_color.g*255), b = int(mat.diffuse_color.b*255), a = 255)
+                    vertexMaterial.specular = struct_w3d.RGBA(r = int(mat.specular_color.r*255), g = int(mat.specular_color.g*255), b = int(mat.specular_color.b*255), a = 255)
+                    meshMaterial.vmInfo = vertexMaterial
                     Mesh.vertMatls.append(meshMaterial)
                     for tex in bpy.data.materials[mesh_ob.name + "." + meshMaterial.vmName].texture_slots:
                         if not (tex == None):

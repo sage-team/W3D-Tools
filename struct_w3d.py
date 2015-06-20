@@ -214,7 +214,7 @@ class MeshShader(Struct):
 	depthCompare = 3 
 	depthMask = 1 
 	colorMask = 0 
-	destBlend = 0 
+	destBlend = 0 #glBlendFunc  (GL_ZERO, GL_ONE, ...)
 	fogFunc = 2 
 	priGradient = 1 
 	secGradient = 0 

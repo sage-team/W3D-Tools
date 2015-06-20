@@ -1222,9 +1222,6 @@ def MainImport(givenfilepath, context, self):
             file.seek(Chunksize,1)
 
     file.close()
-	
-    # set the lamp to sun mode
-    bpy.data.lamps["Lamp"].type = "SUN"
 
     ##create box 
     if not Box.name == "":
@@ -1311,10 +1308,10 @@ def MainImport(givenfilepath, context, self):
                     mat.transparency_method = "Z_TRANSPARENCY"
                     destBlend = 1
             mat.alpha = vm.vmInfo.translucency
-            mat.specular_color = (struct.unpack('B', vm.vmInfo.specular.r)[0], struct.unpack('B', vm.vmInfo.specular.g)[0],
-				struct.unpack('B', vm.vmInfo.specular.b)[0])
-            mat.diffuse_color = (struct.unpack('B', vm.vmInfo.diffuse.r)[0], struct.unpack('B', vm.vmInfo.diffuse.g)[0], 
-				struct.unpack('B', vm.vmInfo.diffuse.b)[0])
+            mat.specular_color = (struct.unpack('B', vm.vmInfo.specular.r)[0]/255, struct.unpack('B', vm.vmInfo.specular.g)[0]/255,
+				struct.unpack('B', vm.vmInfo.specular.b)[0]/255)
+            mat.diffuse_color = (struct.unpack('B', vm.vmInfo.diffuse.r)[0]/255, struct.unpack('B', vm.vmInfo.diffuse.g)[0]/255, 
+				struct.unpack('B', vm.vmInfo.diffuse.b)[0]/255)
             mat.specular_intensity = vm.vmInfo.shininess
             mat.diffuse_intensity = vm.vmInfo.opacity
             mesh.materials.append(mat)
@@ -1335,6 +1332,15 @@ def MainImport(givenfilepath, context, self):
 			#to show textures properly first apply the normal texture
             if not m.bumpMaps.normalMap.entryStruct.normalMap == "":
                 LoadTexture(self, givenfilepath, mesh, m.bumpMaps.normalMap.entryStruct.normalMap, "normal", destBlend)
+                # set the lamp to sun mode
+                try: 
+                    bpy.data.objects["Lamp"].location = (5.0, 5.0, 5.0)
+                    bpy.data.lamps["Lamp"].type = "SUN"
+                except:
+                    lamp_data = bpy.data.lamps.new(name="Lamp", type='SUN')
+                    lamp_object = bpy.data.objects.new(name="Lamp", object_data=lamp_data)
+                    bpy.context.scene.objects.link(lamp_object)
+                    lamp_object.location = (5.0, 5.0, 5.0)
             if not m.bumpMaps.normalMap.entryStruct.diffuseTexName == "":
                 LoadTexture(self, givenfilepath, mesh, m.bumpMaps.normalMap.entryStruct.diffuseTexName, "diffuse", destBlend)
 
