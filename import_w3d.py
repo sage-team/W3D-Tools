@@ -12,9 +12,12 @@ from bpy.props import *
 from mathutils import Vector, Quaternion, Matrix
 from . import struct_w3d
 
-#TODO 
+#bpy.data.window_managers["WinMan"].key_uvs
+#bpy.ops.anim.insert_keyframe_animall()
 
-# make fx textures with alpha use but depend on which value?
+#bpy.ops.wm.addon_enable(module = "animation_animall")
+
+#TODO 
 
 # create animation data
 
@@ -1035,7 +1038,7 @@ def createArmature(self, Hierarchy, amtName):
     bpy.context.scene.update()
 
 	#create the bones from the pivots
-    for pivot in Hierarchy.pivots:			
+    for pivot in Hierarchy.pivots:		
         if pivot.isBone:
             bone = amt.edit_bones.new(pivot.name)
             if pivot.parentID > 0:
@@ -1178,6 +1181,7 @@ def MainImport(givenfilepath, context, self):
     file = open(givenfilepath,"rb")
     file.seek(0,2)
     filesize = file.tell()
+    print(filesize)
     file.seek(0,0)
     Meshes = []
     Box = struct_w3d.Box()
@@ -1191,6 +1195,7 @@ def MainImport(givenfilepath, context, self):
         Chunktype = ReadLong(file)
         Chunksize =  GetChunkSize(ReadLong(file))
         chunkEnd = file.tell() + Chunksize
+        print(Chunksize)
         if Chunktype == 0:
             Meshes.append(ReadMesh(self, file, chunkEnd))
             CM = Meshes[len(Meshes)-1]
@@ -1312,8 +1317,8 @@ def MainImport(givenfilepath, context, self):
 				struct.unpack('B', vm.vmInfo.specular.b)[0]/255)
             mat.diffuse_color = (struct.unpack('B', vm.vmInfo.diffuse.r)[0]/255, struct.unpack('B', vm.vmInfo.diffuse.g)[0]/255, 
 				struct.unpack('B', vm.vmInfo.diffuse.b)[0]/255)
-            mat.specular_intensity = vm.vmInfo.shininess
-            mat.diffuse_intensity = vm.vmInfo.opacity
+            #mat.specular_intensity = vm.vmInfo.shininess
+            #mat.diffuse_intensity = vm.vmInfo.opacity
             mesh.materials.append(mat)
 			
         for tex in m.textures:
@@ -1332,7 +1337,7 @@ def MainImport(givenfilepath, context, self):
 			#to show textures properly first apply the normal texture
             if not m.bumpMaps.normalMap.entryStruct.normalMap == "":
                 LoadTexture(self, givenfilepath, mesh, m.bumpMaps.normalMap.entryStruct.normalMap, "normal", destBlend)
-                # set the lamp to sun mode
+                # set the lamp to sun mode to make bump maps visible
                 try: 
                     bpy.data.objects["Lamp"].location = (5.0, 5.0, 5.0)
                     bpy.data.lamps["Lamp"].type = "SUN"
