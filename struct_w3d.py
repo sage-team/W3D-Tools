@@ -25,8 +25,8 @@ class RGBA(Struct):
     a = 0
 	
 class Version(Struct):
-    major = 6 #to identify models exported by this tool (default is 5)
-    minor = 0
+    major = 4 #to identify models exported by this tool (default is 5)
+    minor = 2
 	
 #######################################################################################
 # Hierarchy
@@ -161,7 +161,7 @@ class MeshTextureStage(Struct):
 class MeshMaterialPass(Struct):
     vmIds = []
     shaderIds = []
-    txStage = MeshTextureStage()	
+    txStage = MeshTextureStage() #has to be an array
 	
 class VertexMaterial(Struct):
     attributes = 0  
@@ -201,9 +201,9 @@ class MeshVertexInfluences(Struct):
 
 class MeshFace(Struct):
     vertIds = []
-    attrs = 0
+    attrs = 13 # SURFACE_TYPE_DEFAULT
     normal = Vector((0.0, 0.0 ,0.0))
-    distance = 0.0 #what is this for?
+    distance = 0.0 #distance from the face to the mesh center
 	
 #######################################################################################
 # Shader
