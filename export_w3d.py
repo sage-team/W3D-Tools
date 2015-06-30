@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 18.06.2015
+#Last Modification 29.06.2015
 #Exports the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -23,6 +23,7 @@ from . import struct_w3d
 # dont write data that is not needed / empty chunks (e.g. vertex influences)
 
 # export animation data (when import works)
+
 
 HEAD = 8 #4(long = chunktype) + 4 (long = chunksize)
 
@@ -60,6 +61,10 @@ def WriteRGBA(file, rgba):
     file.write(struct.pack("B", rgba.g))
     file.write(struct.pack("B", rgba.b))
     file.write(struct.pack("B", rgba.a))
+	
+# only if the chunk has subchunks -> else: WriteLong(file, data)
+def MakeChunkSize(data):
+    return (data | int(0x80000000))
 
 def WriteLong(file, num):
     file.write(struct.pack("<L", num))
@@ -150,7 +155,7 @@ def WriteHierarchy(file, hierarchy):
     pivotFixupsSize = len(hierarchy.pivot_fixups) * 12
     size = HEAD + headerSize + HEAD + pivotsSize #+ HEAD + pivotFixupsSize 
 
-    WriteLong(file, size) #chunksize
+    WriteLong(file, MakeChunkSize(size)) #chunksize
 	
     WriteHierarchyHeader(file, headerSize, hierarchy.header)
     print("Header")
@@ -204,7 +209,7 @@ def WriteAnimation(file, animation):
         channelsSize += (len(channel.data) * channel.vectorLen) * 4
     size = HEAD + headerSize + channelsSize		
 	
-    WriteLong(file, size) #chunksize	
+    WriteLong(file, size) #chunksize
 	
     WriteAnimationHeader(file, headerSize, animation.header)
     print("Header")
@@ -270,7 +275,7 @@ def WriteHLodSubObject(file, size, subObject):
 
 def WriteHLodArray(file, size, lodArray, headerSize, subObjectSize):
     WriteLong(file, 1794) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, MakeChunkSize(size)) #chunksize
 	
     WriteHLodArrayHeader(file, headerSize, lodArray.header)
     for object in lodArray.subObjects:
@@ -286,7 +291,7 @@ def WriteHLod(file, hlod):
     arraySize = HEAD + arrayHeaderSize + (HEAD + subObjectSize) * len(hlod.lodArray.subObjects)
     size = HEAD + headerSize + HEAD + arraySize
 	
-    WriteLong(file, size) #chunksize
+    WriteLong(file, MakeChunkSize(size)) #chunksize
 	
     WriteHLodHeader(file, headerSize, hlod.header)
     print("Header")
@@ -315,10 +320,10 @@ def WriteBox(file, box):
 def WriteTexture(file, texture):
     print(texture.name)
     WriteLong(file, 49) #chunktype
-    WriteLong(file, HEAD + len(texture.name) + 1) # + HEAD + 12) #chunksize 
+    WriteLong(file, HEAD + len(texture.name) + 1)# + HEAD + 12)) #chunksize
 	
     WriteLong(file, 50) #chunktype
-    WriteLong(file, len(texture.name) + 1) #chunksize 
+    WriteLong(file, len(texture.name) + 1) #chunksize
     
     WriteString(file, texture.name)
 	
@@ -343,7 +348,7 @@ def WriteTextureArray(file, size, textures):
 
 def WriteMeshTextureStage(file, size, textureStage):
     WriteLong(file, 72) #chunktype
-    WriteLong(file, size) #chunksize 
+    WriteLong(file, MakeChunkSize(size)) #chunksize  
 	
     WriteLong(file, 73) #chunktype
     WriteLong(file, len(textureStage.txIds) * 4) #chunksize 
@@ -357,15 +362,15 @@ def WriteMeshTextureStage(file, size, textureStage):
 
 def WriteMeshMaterialPass(file, size, matlPass):
     WriteLong(file, 56) #chunktype
-    WriteLong(file, size) #chunksize  
+    WriteLong(file, MakeChunkSize(size)) #chunksize  
 	
     WriteLong(file, 57) #chunktype
     WriteLong(file, len(matlPass.vmIds) * 4) #chunksize  
-	
+
     WriteLongArray(file, matlPass.vmIds)
  
     WriteLong(file, 58) #chunktype
-    WriteLong(file, len(matlPass.shaderIds) * 4) #chunksize  
+    WriteLong(file, len(matlPass.shaderIds) * 4) #chunksize 
 	
     WriteLongArray(file, matlPass.shaderIds)
 	
@@ -401,10 +406,10 @@ def WriteMaterial(file, mat):
 
 def WriteMeshMaterialArray(file, size, materials):
     WriteLong(file, 42) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, MakeChunkSize(size)) #chunksize
 	
     WriteLong(file, 43) #chunktype
-    WriteLong(file, size - HEAD) #chunksize
+    WriteLong(file, MakeChunkSize(size - HEAD)) #chunksize
 
     for mat in materials:
         WriteMaterial(file, mat)
@@ -580,7 +585,7 @@ def WriteNormalMap(file, normalMap):
 	
 def WriteMeshBumpMapArray(file, size, bumpMapArray):
     WriteLong(file, 80) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, MakeChunkSize(size)) #chunksize
 
     WriteNormalMap(file, bumpMapArray.normalMap)
 	
@@ -660,6 +665,7 @@ def WriteMesh(file, mesh):
     vertSize = len(mesh.verts) * 12
     normSize = len(mesh.normals) * 12
     faceSize = len(mesh.faces) * 32
+    shadeIndicesSize = len(mesh.verts) * 4
     userTextSize = 0
     if not mesh.userText ==  "":
         userTextSize = len(mesh.userText) + 1
@@ -675,9 +681,10 @@ def WriteMesh(file, mesh):
         if len(mat.vmArgs1) > 0:
             matArraySize += HEAD + len(mat.vmArgs1) + 1
 			
-        for tex in bpy.data.materials[mesh.header.meshName + "." + mat.vmName].texture_slots:
-            if not (tex == None):
-                textureArraySize += HEAD + len(tex.name) + 1 #+ HEAD + 12
+        if not mat.vmName == "":
+            for tex in bpy.data.materials[mesh.header.meshName + "." + mat.vmName].texture_slots:
+                if not (tex == None):
+                    textureArraySize += HEAD + len(tex.name) + 1 #+ HEAD + 12
      
     shaderArraySize = len(mesh.shaders) * 16
 	 
@@ -692,6 +699,7 @@ def WriteMesh(file, mesh):
     size += HEAD + vertSize 
     size += HEAD + normSize 
     size += HEAD + faceSize 
+    size += HEAD + shadeIndicesSize
     if not mesh.userText ==  "":
         size += HEAD + userTextSize
     if len(mesh.vertInfs) > 0:
@@ -708,7 +716,7 @@ def WriteMesh(file, mesh):
     if not mesh.bumpMaps.normalMap.entryStruct.diffuseTexName == "":
         size += HEAD + bumpMapArraySize
     
-    WriteLong(file, size) #chunksize
+    WriteLong(file, MakeChunkSize(size)) #chunksize
 	
     WriteMeshHeader(file, headerSize, mesh.header)
     print("Header")
@@ -726,18 +734,23 @@ def WriteMesh(file, mesh):
     if len(mesh.vertInfs) > 0:
         WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
         print("Vertex Influences")
+		
+    WriteLong(file, 34) #chunktype
+    WriteLong(file, shadeIndicesSize) #chunksize
+    WriteLongArray(file, mesh.shadeIds)
+    print("VertexShadeIndices")
+	
     WriteMeshMaterialSetInfo(file, matSetInfoSize, mesh.matInfo)
     print("MaterialSetInfo")
     if mesh.matInfo.vertMatlCount > 0:
         WriteMeshMaterialArray(file, matArraySize, mesh.vertMatls)
         print("Materials")
-    if mesh.matInfo.textureCount > 0:
-        WriteTextureArray(file, textureArraySize, mesh.textures)
-        print("Textures")
-    print(mesh.matInfo.shaderCount)
     if mesh.matInfo.shaderCount > 0:
         WriteMeshShaderArray(file, shaderArraySize, mesh.shaders)
         print("Shader")
+    if mesh.matInfo.textureCount > 0:
+        WriteTextureArray(file, textureArraySize, mesh.textures)
+        print("Textures")
     if mesh.matInfo.passCount > 0:
         WriteMeshMaterialPass(file, materialPassSize, mesh.matlPass)
         print("MaterialPass")
@@ -793,6 +806,8 @@ def MainExport(givenfilepath, self, context):
     # Get all the mesh objects in the scene.
     objList = [object for object in bpy.context.scene.objects if object.type == 'MESH']
     containerName = (os.path.splitext(os.path.basename(sknFile.name))[0]).upper()
+	
+    #write the bounding box then the rest of the meshes
     for mesh_ob in objList:
         if mesh_ob.name == "BOUNDINGBOX":
             Box = struct_w3d.Box()
@@ -802,7 +817,9 @@ def MainExport(givenfilepath, self, context):
             Box.extend = Vector((box_mesh.vertices[0].co.x * 2, box_mesh.vertices[0].co.y * 2, box_mesh.vertices[0].co.z))
 			
             WriteBox(sknFile, Box)
-        else:
+			
+    for mesh_ob in objList:
+        if not mesh_ob.name == "BOUNDINGBOX":
             Mesh = struct_w3d.Mesh()
             Header = struct_w3d.MeshHeader()
             Mesh.aabtree = struct_w3d.MeshAABTree()
@@ -815,6 +832,7 @@ def MainExport(givenfilepath, self, context):
             faces = []
             uvs = []
             vertInfs = []
+            vertexShadeIndices = []
 
             Header.meshName = mesh_ob.name
             Header.containerName = containerName
@@ -827,7 +845,10 @@ def MainExport(givenfilepath, self, context):
             Mesh.vertInfs = []
             group_lookup = {g.index: g.name for g in mesh_ob.vertex_groups}
             groups = {name: [] for name in group_lookup.values()}
+            vertShadeIndex = 0
             for v in mesh.vertices:
+                vertexShadeIndices.append(vertShadeIndex)
+                vertShadeIndex += 1
                 verts.append(v.co.xyz)
                 normals.append(v.normal)
                 Mesh.matlPass.txStage.txCoords.append((0.0, 0.0)) #just to fill the array 
@@ -861,6 +882,7 @@ def MainExport(givenfilepath, self, context):
 			
             Mesh.verts = verts
             Mesh.normals = normals
+            Mesh.shadeIds = vertexShadeIndices
             Header.minCorner = Vector((mesh_ob.bound_box[0][0], mesh_ob.bound_box[0][1], mesh_ob.bound_box[0][2]))
             Header.maxCorner =  Vector((mesh_ob.bound_box[6][0], mesh_ob.bound_box[6][1], mesh_ob.bound_box[6][2]))
 
@@ -868,6 +890,11 @@ def MainExport(givenfilepath, self, context):
                 triangle = struct_w3d.MeshFace()
                 triangle.vertIds = [face.vertices[0], face.vertices[1], face.vertices[2]]
                 triangle.normal = face.normal
+                tri_x = (verts[face.vertices[0]].x + verts[face.vertices[1]].x + verts[face.vertices[2]].x)/3
+                tri_y = (verts[face.vertices[0]].y + verts[face.vertices[1]].y + verts[face.vertices[2]].y)/3
+                tri_z = (verts[face.vertices[0]].z + verts[face.vertices[1]].z + verts[face.vertices[2]].z)/3
+                tri_pos = Vector((tri_x, tri_y, tri_z))				
+                triangle.distance = (mesh_ob.location - tri_pos).length
                 faces.append(triangle)
             Mesh.faces = faces
 			
@@ -928,19 +955,22 @@ def MainExport(givenfilepath, self, context):
                     vertexMaterial.ambient = struct_w3d.RGBA(r = 255, g = 255, b = 255, a = 255)
                     vertexMaterial.diffuse = struct_w3d.RGBA(r = int(mat.diffuse_color.r*255), g = int(mat.diffuse_color.g*255), b = int(mat.diffuse_color.b*255), a = 255)
                     vertexMaterial.specular = struct_w3d.RGBA(r = int(mat.specular_color.r*255), g = int(mat.specular_color.g*255), b = int(mat.specular_color.b*255), a = 255)
+                    vertexMaterial.shininess = 1.0#mat.specular_intensity
+                    vertexMaterial.opacity = 1.0#mat.diffuse_intensity         
                     meshMaterial.vmInfo = vertexMaterial
                     Mesh.vertMatls.append(meshMaterial)
-                    for tex in bpy.data.materials[mesh_ob.name + "." + meshMaterial.vmName].texture_slots:
-                        if not (tex == None):
-                            Mesh.matInfo.textureCount += 1
-                            texture = struct_w3d.Texture()
-                            texture.name = tex.name
-                            Mesh.textures.append(texture)
+                    if not meshMaterial.vmName == "":
+                        for tex in bpy.data.materials[mesh_ob.name + "." + meshMaterial.vmName].texture_slots:
+                            if not (tex == None):
+                                Mesh.matInfo.textureCount += 1
+                                texture = struct_w3d.Texture()
+                                texture.name = tex.name
+                                Mesh.textures.append(texture)
 
             Header.matlCount = len(Mesh.vertMatls)
 			
             if len(mesh_ob.vertex_groups) > 0:		 
-                Header.attrs = 131072 #type skin
+                Header.attrs = 163840 #type skin, cast shadow
                 Header.vertChannelCount = 19
             else:
                 Header.attrs = 0 #type normal mesh
