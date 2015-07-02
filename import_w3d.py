@@ -10,7 +10,7 @@ import sys
 import bmesh
 from bpy.props import *
 from mathutils import Vector, Quaternion, Matrix
-from . import struct_w3d
+from . import struct_w3d, export_w3d
 
 #bpy.data.window_managers["WinMan"].key_uvs
 #bpy.ops.anim.insert_keyframe_animall()
@@ -18,6 +18,10 @@ from . import struct_w3d
 #bpy.ops.wm.addon_enable(module = "animation_animall")
 
 #TODO 
+
+# chunk 0x3f rgb einstellungen?? 
+
+# set armature visibel if mesh is not imported
 
 # create animation data
 
@@ -62,7 +66,7 @@ def ReadLongFixedString(file):
     return SplitString[0]
 
 def ReadRGBA(file):
-    return struct_w3d.RGBA(r=file.read(1),g=file.read(1),b=file.read(1),a=file.read(1))
+    return struct_w3d.RGBA(r=ord(file.read(1)),g=ord(file.read(1)),b=ord(file.read(1)),a=ord(file.read(1)))
 
 def GetChunkSize(data):
     return (data & int(0x7FFFFFFF))
@@ -90,10 +94,10 @@ def ReadFloat(file):
     return (struct.unpack("f",file.read(4))[0])
 	
 def ReadSignedByte(file):
-    return (struct.unpack("<b",file.read(1))[0])	
+    return (struct.unpack("<B", file.read(1))[0])	
 	
 def ReadUnsignedByte(file):
-    return (struct.unpack("<B",file.read(1))[0])
+    return (struct.unpack("<b", file.read(1))[0])
 	
 def ReadVector(file):
     return Vector((ReadFloat(file), ReadFloat(file), ReadFloat(file)))
@@ -407,12 +411,12 @@ def ReadMeshTextureCoordArray(file, chunkEnd):
     return txCoords
 
 def ReadMeshTextureStage(file, self, chunkEnd):
+    TextureIds = []
+    TextureCoords = []
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
-        TextureIds = []
-        TextureCoords = []
         if chunkType == 73:
             TextureIds = ReadLongArray(file, subChunkEnd)
         elif chunkType == 74:
@@ -435,7 +439,7 @@ def ReadMeshMaterialPass(file, self, chunkEnd):
         if chunkType == 57: #Vertex Material Ids
             VertexMaterialIds = ReadLongArray(file, subChunkEnd)
         elif chunkType == 58:#Shader Ids
-            shaderIds = ReadLongArray(file, subChunkEnd)
+            ShaderIds = ReadLongArray(file, subChunkEnd)
         elif chunkType == 59:# per-vertex diffuse color values (array of W3dRGBAStruct's)
             file.seek(chunkSize, 1)
         elif chunkType == 63:# dont know what this is -> size is always 4
@@ -568,7 +572,7 @@ def ReadMeshShaderArray(file, chunkEnd):
 #######################################################################################
 	
 def ReadNormalMapHeader(file, chunkEnd): 
-    number = file.read(1)
+    number = ReadSignedByte(file)
     typeName = ReadLongFixedString(file)
     reserved = ReadLong(file)
     return struct_w3d.MeshNormalMapHeader(number = number, typeName = typeName, reserved = reserved)
@@ -895,7 +899,7 @@ def ReadMesh(self, file, chunkEnd):
             file.seek(Chunksize,1)
     return struct_w3d.Mesh(header = MeshHeader, verts = MeshVertices, normals = MeshNormals, vertInfs = MeshVerticesInfs, 
 				faces = MeshFaces, userText = MeshUsertext, shadeIds = MeshShadeIds, matInfo = MeshMaterialInfo, 
-				matlheader = [], shaders = MeshShaders, vertMatls = MeshVerticeMats, textures = MeshTextures, 
+				shaders = MeshShaders, vertMatls = MeshVerticeMats, textures = MeshTextures, 
 				matlPass = MeshMaterialPass, bumpMaps = MeshBumpMaps, aabtree = MeshAABTree)
 	
 #######################################################################################
@@ -1024,7 +1028,6 @@ def loadBoneMesh(self, filepath):
 #######################################################################################			
 	
 def createArmature(self, Hierarchy, amtName):
-    #the bones are just spheres, because if tails are created, the rotation of the bone is corrupted 
     amt = bpy.data.armatures.new(Hierarchy.header.name)
     amt.show_names = True
     rig = bpy.data.objects.new(amtName, amt)
@@ -1164,7 +1167,7 @@ def createBox(Box):
     box = bpy.data.objects.new(name, cube)
     mat = bpy.data.materials.new("BOUNDINGBOX.Material")
     mat.use_shadeless = True
-    mat.diffuse_color = (struct.unpack('B', Box.color.r)[0], struct.unpack('B', Box.color.g)[0], struct.unpack('B', Box.color.b)[0])
+    mat.diffuse_color = (Box.color.r, Box.color.g, Box.color.b)
     cube.materials.append(mat)
     box.location = Box.center
     bpy.context.scene.objects.link(box)
@@ -1178,10 +1181,10 @@ def createBox(Box):
 #######################################################################################	
 
 def MainImport(givenfilepath, context, self):
+    testfile = open(givenfilepath.replace("_skn", "b_skn"),"wb")
     file = open(givenfilepath,"rb")
     file.seek(0,2)
     filesize = file.tell()
-    print(filesize)
     file.seek(0,0)
     Meshes = []
     Box = struct_w3d.Box()
@@ -1195,18 +1198,20 @@ def MainImport(givenfilepath, context, self):
         Chunktype = ReadLong(file)
         Chunksize =  GetChunkSize(ReadLong(file))
         chunkEnd = file.tell() + Chunksize
-        print(Chunksize)
         if Chunktype == 0:
-            Meshes.append(ReadMesh(self, file, chunkEnd))
-            CM = Meshes[len(Meshes)-1]
+            m = ReadMesh(self, file, chunkEnd)
+            Meshes.append(m)		
             file.seek(chunkEnd,0)
+            export_w3d.WriteMesh(testfile, m)
 
         elif Chunktype == 256:
             Hierarchy = ReadHierarchy(file, self, chunkEnd)
+            export_w3d.WriteHierarchy(testfile, Hierarchy)
             file.seek(chunkEnd,0)
 
         elif Chunktype == 512:
             Animation = ReadAnimation(file, self, chunkEnd)
+            export_w3d.WriteAnimation(testfile, Animation)
             file.seek(chunkEnd,0)
 
         elif Chunktype == 640:
@@ -1215,10 +1220,12 @@ def MainImport(givenfilepath, context, self):
 
         elif Chunktype == 1792:
             HLod = ReadHLod(file, self, chunkEnd)
+            export_w3d.WriteHLod(testfile, HLod)
             file.seek(chunkEnd,0)
 
         elif Chunktype == 1856:
             Box = ReadBox(file, chunkEnd)
+            export_w3d.WriteBox(testfile, Box)
             file.seek(chunkEnd,0)
 
         else:
@@ -1227,12 +1234,12 @@ def MainImport(givenfilepath, context, self):
             file.seek(Chunksize,1)
 
     file.close()
+    testfile.close()
 
-    ##create box 
     if not Box.name == "":
         createBox(Box)
 	
-	##load skeleton (_skl.w3d) file if needed 
+	#load skeleton (_skl.w3d) file if needed 
     if HLod.header.modelName != HLod.header.HTreeName:
         try:
             Hierarchy = LoadSKL(givenfilepath, self, HLod.header.HTreeName)
@@ -1313,10 +1320,8 @@ def MainImport(givenfilepath, context, self):
                     mat.transparency_method = "Z_TRANSPARENCY"
                     destBlend = 1
             mat.alpha = vm.vmInfo.translucency
-            mat.specular_color = (struct.unpack('B', vm.vmInfo.specular.r)[0]/255, struct.unpack('B', vm.vmInfo.specular.g)[0]/255,
-				struct.unpack('B', vm.vmInfo.specular.b)[0]/255)
-            mat.diffuse_color = (struct.unpack('B', vm.vmInfo.diffuse.r)[0]/255, struct.unpack('B', vm.vmInfo.diffuse.g)[0]/255, 
-				struct.unpack('B', vm.vmInfo.diffuse.b)[0]/255)
+            mat.specular_color = (vm.vmInfo.specular.r, vm.vmInfo.specular.g, vm.vmInfo.specular.b)
+            mat.diffuse_color = (vm.vmInfo.diffuse.r, vm.vmInfo.diffuse.g, vm.vmInfo.diffuse.b)
             #mat.specular_intensity = vm.vmInfo.shininess
             #mat.diffuse_intensity = vm.vmInfo.opacity
             mesh.materials.append(mat)
@@ -1357,10 +1362,11 @@ def MainImport(givenfilepath, context, self):
             #        32768  -> normal mesh - cast shadow
             #        131072 -> skin
             #        139264 -> skin - two sided
+			#        143360 -> skin - two sided - hidden
 			#        163840 -> skin - cast shadow
             #        172032 -> skin - two sided - cast shadow
             type = m.header.attrs
-            if type == 8192 or type == 139264:
+            if type == 8192 or type == 139264 or type == 143360 or type == 172032:
                 mesh.show_double_sided = True
 				
             if type == 0 or type == 8192 or type == 32768:
@@ -1378,7 +1384,7 @@ def MainImport(givenfilepath, context, self):
                             mesh_ob.parent_bone = parent_pivot.name
                             mesh_ob.parent_type = 'BONE'
 
-            elif type == 131072 or type == 139264 or type == 163840 or type == 172032:
+            elif type == 131072 or type == 139264 or type == 143360 or type == 163840 or type == 172032:
                 for pivot in Hierarchy.pivots:
                     mesh_ob.vertex_groups.new(pivot.name)
 						

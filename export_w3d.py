@@ -64,7 +64,7 @@ def WriteRGBA(file, rgba):
 	
 # only if the chunk has subchunks -> else: WriteLong(file, data)
 def MakeChunkSize(data):
-    return (data | int(0x80000000))
+    return (data | 0x80000000)
 
 def WriteLong(file, num):
     file.write(struct.pack("<L", num))
@@ -81,9 +81,12 @@ def WriteLongArray(file, array):
 
 def WriteFloat(file, num):
     file.write(struct.pack("<f", num))
+	
+def WriteSignedByte(file, num):
+    file.write(struct.pack("<b", num))
 
 def WriteUnsignedByte(file, num):
-    file.write(struct.pack("<b", num))
+    file.write(struct.pack("<B", num))
 
 def WriteSignedShort(file, num):
     file.write(struct.pack("<h", num))
@@ -153,7 +156,9 @@ def WriteHierarchy(file, hierarchy):
     headerSize = 36
     pivotsSize = len(hierarchy.pivots) * 60
     pivotFixupsSize = len(hierarchy.pivot_fixups) * 12
-    size = HEAD + headerSize + HEAD + pivotsSize #+ HEAD + pivotFixupsSize 
+    size = HEAD + headerSize + HEAD + pivotsSize 
+    if pivotFixupsSize > 0:
+        size += HEAD + pivotFixupsSize 
 
     WriteLong(file, MakeChunkSize(size)) #chunksize
 	
@@ -162,9 +167,9 @@ def WriteHierarchy(file, hierarchy):
     WritePivots(file, pivotsSize, hierarchy.pivots)
     print("Pivots")
 	# still dont know what pivotFixups are for and what they are
-    #if pivotFixupsSize > 0:
-    #    WritePivotFixups(file, pivotFixupsSize, hierarchy.pivot_fixups)
-    #    print("Pivot Fixups")
+    if pivotFixupsSize > 0:
+        WritePivotFixups(file, pivotFixupsSize, hierarchy.pivot_fixups)
+        print("Pivot Fixups")
 	
 #######################################################################################
 # Animation
@@ -205,11 +210,11 @@ def WriteAnimation(file, animation):
 	
     headerSize = 44
     channelsSize = len(animation.channels) * (12 + HEAD)
-    for channel in channels:
+    for channel in animation.channels:
         channelsSize += (len(channel.data) * channel.vectorLen) * 4
     size = HEAD + headerSize + channelsSize		
 	
-    WriteLong(file, size) #chunksize
+    WriteLong(file, MakeChunkSize(size)) #chunksize
 	
     WriteAnimationHeader(file, headerSize, animation.header)
     print("Header")
@@ -320,7 +325,7 @@ def WriteBox(file, box):
 def WriteTexture(file, texture):
     print(texture.name)
     WriteLong(file, 49) #chunktype
-    WriteLong(file, HEAD + len(texture.name) + 1)# + HEAD + 12)) #chunksize
+    WriteLong(file,  MakeChunkSize(HEAD + len(texture.name) + 1))# + HEAD + 12)) #chunksize
 	
     WriteLong(file, 50) #chunktype
     WriteLong(file, len(texture.name) + 1) #chunksize
@@ -337,7 +342,7 @@ def WriteTexture(file, texture):
 
 def WriteTextureArray(file, size, textures):
     WriteLong(file, 48) #chunktype
-    WriteLong(file, size) #chunksize  
+    WriteLong(file, MakeChunkSize(size)) #chunksize  
 	
     for texture in textures:
         WriteTexture(file, texture)
@@ -374,7 +379,8 @@ def WriteMeshMaterialPass(file, size, matlPass):
 	
     WriteLongArray(file, matlPass.shaderIds)
 	
-    WriteMeshTextureStage(file, HEAD + len(matlPass.txStage.txIds) * 4 + HEAD + len(matlPass.txStage.txCoords) * 8, matlPass.txStage)
+    if len(matlPass.txStage.txIds) > 0:
+        WriteMeshTextureStage(file, HEAD + len(matlPass.txStage.txIds) * 4 + HEAD + len(matlPass.txStage.txCoords) * 8, matlPass.txStage)
 
 def WriteMaterial(file, mat):
     WriteLong(file, 44) #chunktype
@@ -504,7 +510,7 @@ def WriteNormalMapHeader(file, header):
     WriteLong(file, 82) #chunktype
     WriteLong(file, 37) #chunksize
 	
-    WriteUnsignedByte(file, header.number)
+    WriteSignedByte(file, header.number)
     WriteLongFixedString(file, header.typeName)
     WriteLong(file, header.reserved)
 
@@ -588,6 +594,49 @@ def WriteMeshBumpMapArray(file, size, bumpMapArray):
     WriteLong(file, MakeChunkSize(size)) #chunksize
 
     WriteNormalMap(file, bumpMapArray.normalMap)
+	
+#######################################################################################
+# AABTree (Axis-aligned-bounding-box)
+#######################################################################################	
+
+def WriteAABTreeHeader(file, size, header):
+    WriteLong(file, 145) #chunktype
+    WriteLong(file, size) #chunksize
+
+    WriteLong(file, header.nodeCount)
+    WriteLong(file, header.polyCount)
+
+def WriteAABTreePolyIndices(file, size, polyIndices):
+    WriteLong(file, 146) #chunktype
+    WriteLong(file, size) #chunksize
+	
+    for poly in polyIndices:
+        WriteLong(file, poly)
+
+def WriteAABTreeNodes(file, size, nodes):
+    WriteLong(file, 147) #chunktype
+    WriteLong(file, size) #chunksize
+	
+    for node in nodes:
+        WriteVector(file, node.min)
+        WriteVector(file, node.max)
+        WriteLong(file, node.frontOrPoly0)
+        WriteLong(file, node.backOrPolyCount)
+
+def WriteAABTree(file, size, aabtree):
+    WriteLong(file, 144) #chunktype
+    WriteLong(file, MakeChunkSize(size)) #chunksize
+	
+    headerSize = 8
+    WriteAABTreeHeader(file, headerSize, aabtree.header)
+    
+    polySize = len(aabtree.polyIndices) * 4
+    if polySize > 0:
+        WriteAABTreePolyIndices(file, polySize, aabtree.polyIndices)
+	
+    nodeSize = len(aabtree.nodes) * 32
+    if nodeSize > 0:
+        WriteAABTreeNodes(file, nodeSize, aabtree.nodes)
 	
 #######################################################################################
 # Mesh Sphere
@@ -682,17 +731,21 @@ def WriteMesh(file, mesh):
             matArraySize += HEAD + len(mat.vmArgs1) + 1
 			
         if not mat.vmName == "":
-            for tex in bpy.data.materials[mesh.header.meshName + "." + mat.vmName].texture_slots:
-                if not (tex == None):
-                    textureArraySize += HEAD + len(tex.name) + 1 #+ HEAD + 12
+            for tex in mesh.textures:
+               textureArraySize += HEAD + len(tex.name) + 1 #+ HEAD + 12
      
     shaderArraySize = len(mesh.shaders) * 16
 	 
-    materialPassSize = (HEAD + len(mesh.matlPass.vmIds) * 4 + HEAD + len(mesh.matlPass.shaderIds) * 4 + HEAD + HEAD 
-		+ len(mesh.matlPass.txStage.txIds) * 4 + HEAD + len(mesh.matlPass.txStage.txCoords) * 8)
-		
-    bumpMapArraySize = (HEAD + 45 + 301 + len(mesh.bumpMaps.normalMap.entryStruct.diffuseTexName) + 1 
-		+ len(mesh.bumpMaps.normalMap.entryStruct.normalMap) + 1)
+    materialPassSize = (HEAD + len(mesh.matlPass.vmIds) * 4 + HEAD + len(mesh.matlPass.shaderIds) * 4)
+    if len(mesh.matlPass.txStage.txIds) > 0:		
+        materialPassSize += HEAD + HEAD + len(mesh.matlPass.txStage.txIds) * 4 + HEAD + len(mesh.matlPass.txStage.txCoords) * 8
+    bumpMapArraySize = (HEAD + 45 + 301 + len(mesh.bumpMaps.normalMap.entryStruct.diffuseTexName) + 1 + len(mesh.bumpMaps.normalMap.entryStruct.normalMap) + 1)
+	
+    aabtreeSize = HEAD + 8	
+    if mesh.aabtree.header.polyCount > 0:
+        aabtreeSize += HEAD + len(mesh.aabtree.polyIndices) * 4
+    if mesh.aabtree.header.nodeCount > 0:
+        aabtreeSize += HEAD + len(mesh.aabtree.nodes) * 32
 	
 	#size of the mesh chunk
     size = HEAD + headerSize 
@@ -715,6 +768,8 @@ def WriteMesh(file, mesh):
         size += HEAD + materialPassSize
     if not mesh.bumpMaps.normalMap.entryStruct.diffuseTexName == "":
         size += HEAD + bumpMapArraySize
+    if (mesh.aabtree.header.nodeCount > 0 or mesh.aabtree.header.polyCount > 0):
+        size += HEAD + aabtreeSize
     
     WriteLong(file, MakeChunkSize(size)) #chunksize
 	
@@ -757,8 +812,10 @@ def WriteMesh(file, mesh):
     if not mesh.bumpMaps.normalMap.entryStruct.normalMap == "":
         WriteMeshBumpMapArray(file, bumpMapArraySize, mesh.bumpMaps)
         print("BumpMaps")
+    if (mesh.aabtree.header.nodeCount > 0 or mesh.aabtree.header.polyCount > 0):
+        WriteAABTree(file, aabtreeSize, mesh.aabtree)
+        print("AABTree")
     
-	
 #######################################################################################
 # Main Export
 #######################################################################################	
@@ -807,7 +864,15 @@ def MainExport(givenfilepath, self, context):
     objList = [object for object in bpy.context.scene.objects if object.type == 'MESH']
     containerName = (os.path.splitext(os.path.basename(sknFile.name))[0]).upper()
 	
-    #write the bounding box then the rest of the meshes
+    myObs = []
+    #myObs.append(bpy.context.scene.objects['SHEATH'])
+    #myObs.append(bpy.context.scene.objects['SOLDIER'])
+    #myObs.append(bpy.context.scene.objects['ARMOR'])
+    #myObs.append(bpy.context.scene.objects['SWORD'])
+    #myObs.append(bpy.context.scene.objects['BOUNDINGBOX'])
+    #myObs.append(bpy.context.scene.objects['FORGED_BLADE'])
+    #myObs.append(bpy.context.scene.objects['BAT_SHIELD'])
+	
     for mesh_ob in objList:
         if mesh_ob.name == "BOUNDINGBOX":
             Box = struct_w3d.Box()
@@ -817,9 +882,7 @@ def MainExport(givenfilepath, self, context):
             Box.extend = Vector((box_mesh.vertices[0].co.x * 2, box_mesh.vertices[0].co.y * 2, box_mesh.vertices[0].co.z))
 			
             WriteBox(sknFile, Box)
-			
-    for mesh_ob in objList:
-        if not mesh_ob.name == "BOUNDINGBOX":
+        else:
             Mesh = struct_w3d.Mesh()
             Header = struct_w3d.MeshHeader()
             Mesh.aabtree = struct_w3d.MeshAABTree()
@@ -953,8 +1016,8 @@ def MainExport(givenfilepath, self, context):
                     Mesh.matInfo.vertMatlCount += 1
                     meshMaterial.vmName = matName
                     vertexMaterial.ambient = struct_w3d.RGBA(r = 255, g = 255, b = 255, a = 255)
-                    vertexMaterial.diffuse = struct_w3d.RGBA(r = int(mat.diffuse_color.r*255), g = int(mat.diffuse_color.g*255), b = int(mat.diffuse_color.b*255), a = 255)
-                    vertexMaterial.specular = struct_w3d.RGBA(r = int(mat.specular_color.r*255), g = int(mat.specular_color.g*255), b = int(mat.specular_color.b*255), a = 255)
+                    vertexMaterial.diffuse = struct_w3d.RGBA(r = int(mat.diffuse_color.r), g = int(mat.diffuse_color.g), b = int(mat.diffuse_color.b), a = 255)
+                    vertexMaterial.specular = struct_w3d.RGBA(r = int(mat.specular_color.r), g = int(mat.specular_color.g), b = int(mat.specular_color.b), a = 255)
                     vertexMaterial.shininess = 1.0#mat.specular_intensity
                     vertexMaterial.opacity = 1.0#mat.diffuse_intensity         
                     meshMaterial.vmInfo = vertexMaterial

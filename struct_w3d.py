@@ -307,7 +307,6 @@ class Mesh(Struct):
     userText  = ""
     shadeIds = []
     matInfo = MeshMaterialSetInfo()
-    matlheader = []
     shaders = []
     vertMatls = []
     textures = []
