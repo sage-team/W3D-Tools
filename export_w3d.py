@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 29.06.2015
+#Last Modification 08.07.2015
 #Exports the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -14,13 +14,15 @@ from . import struct_w3d
 
 #TODO 
 
+# support for export with existing skeleton file! (test if all the pivots exist and are equal)
+
+# support for export as simple mesh (without HLOD and Hierarchy)
+
 # write AABTree to file
 
 # change test if we need to write normal map chunk
 
 # fix sphere calculation
-
-# dont write data that is not needed / empty chunks (e.g. vertex influences)
 
 # export animation data (when import works)
 
@@ -87,9 +89,6 @@ def WriteSignedByte(file, num):
 
 def WriteUnsignedByte(file, num):
     file.write(struct.pack("<B", num))
-
-def WriteSignedShort(file, num):
-    file.write(struct.pack("<h", num))
 	
 def WriteVector(file, vec):
     WriteFloat(file, vec[0])
@@ -150,7 +149,7 @@ def WritePivotFixups(file, size, pivot_fixups):
         WriteVector(file, fixup)
 
 def WriteHierarchy(file, hierarchy):
-    print("### NEW HIERARCHY: ###")
+    print("\n### NEW HIERARCHY: ###")
     WriteLong(file, 256) #chunktype
     
     headerSize = 36
@@ -205,7 +204,7 @@ def WriteAnimationChannel(file, channel):
             WriteQuaternion(file, quat)
 
 def WriteAnimation(file, animation):
-    print("### NEW ANIMATION: ###")
+    print("\n### NEW ANIMATION: ###")
     WriteLong(file, 512) #chunktype
 	
     headerSize = 44
@@ -232,9 +231,16 @@ def WriteCompressedAnimationHeader(file, size, header):
     WriteLong(file, header.numFrames)
     WriteShort(file, header.frameRate)
     WriteShort(file, header.flavor)
+	
+def WriteTimeCodedAnimVector(file, size, animVector):
+    WriteLong(file, 644) #chunktype
+    WriteLong(file, size) #chunksize
+	
+    print("#####not implemented yet!!")
+    
 		
 def WriteCompressedAnimation(file, compAnimation):
-    print("### NEW COMPRESSED ANIMATION: ###")
+    print("\n### NEW COMPRESSED ANIMATION: ###")
     WriteLong(file, 640) #chunktype
 	
     headerSize = 44
@@ -262,7 +268,7 @@ def WriteHLodHeader(file, size, header):
     WriteLong(file, MakeVersion(header.version))
     WriteLong(file, header.lodCount)
     WriteFixedString(file, header.modelName)
-    WriteFixedString(file, header.HTreeName)
+    WriteFixedString(file, "GUMAARMS_SKL") #header.HTreeName
 
 def WriteHLodArrayHeader(file, size, arrayHeader):
     WriteLong(file, 1795) #chunktype
@@ -287,7 +293,7 @@ def WriteHLodArray(file, size, lodArray, headerSize, subObjectSize):
         WriteHLodSubObject(file, subObjectSize, object)
 
 def WriteHLod(file, hlod):
-    print("### NEW HLOD: ###")
+    print("\n### NEW HLOD: ###")
     WriteLong(file, 1792) #chunktype
 	
     headerSize = 40
@@ -351,6 +357,13 @@ def WriteTextureArray(file, size, textures):
 # Material
 #######################################################################################	
 
+def WriteMeshTextureCoordArray(file, txCoords):
+    WriteLong(file, 74) #chunktype
+    WriteLong(file, len(txCoords) * 8) #chunksize 
+    for coord in txCoords:
+        WriteFloat(file, coord[0])
+        WriteFloat(file, coord[1])
+
 def WriteMeshTextureStage(file, size, textureStage):
     WriteLong(file, 72) #chunktype
     WriteLong(file, MakeChunkSize(size)) #chunksize  
@@ -359,11 +372,7 @@ def WriteMeshTextureStage(file, size, textureStage):
     WriteLong(file, len(textureStage.txIds) * 4) #chunksize 
     WriteLongArray(file, textureStage.txIds)
 	
-    WriteLong(file, 74) #chunktype
-    WriteLong(file, len(textureStage.txCoords) * 8) #chunksize 
-    for coord in textureStage.txCoords:
-        WriteFloat(file, coord[0])
-        WriteFloat(file, coord[1])
+    WriteMeshTextureCoordArray(file, textureStage.txCoords)
 
 def WriteMeshMaterialPass(file, size, matlPass):
     WriteLong(file, 56) #chunktype
@@ -378,6 +387,13 @@ def WriteMeshMaterialPass(file, size, matlPass):
     WriteLong(file, len(matlPass.shaderIds) * 4) #chunksize 
 	
     WriteLongArray(file, matlPass.shaderIds)
+	
+    if len(matlPass.dcg) > 0:
+        WriteLong(file, 59) #chunktype
+        WriteLong(file, len(matlPass.dcg) * 4) #chunksize 
+ 
+        for dcg in matlPass.dcg: 
+            WriteRGBA(file, dcg)
 	
     if len(matlPass.txStage.txIds) > 0:
         WriteMeshTextureStage(file, HEAD + len(matlPass.txStage.txIds) * 4 + HEAD + len(matlPass.txStage.txCoords) * 8, matlPass.txStage)
@@ -439,6 +455,13 @@ def WriteMeshVerticesArray(file, size, vertices):
 	
     for vert in vertices:
         WriteVector(file, vert)
+		
+def WriteMeshVerticesCopyArray(file, size, vertices):
+    WriteLong(file, 3072) #chunktype
+    WriteLong(file, size) #chunksize
+	
+    for vert in vertices:
+        WriteVector(file, vert)
 
 def WriteMeshVertexInfluences(file, size, influences):
     WriteLong(file, 14) #chunktype
@@ -456,6 +479,13 @@ def WriteMeshVertexInfluences(file, size, influences):
 	
 def WriteMeshNormalArray(file, size, normals):
     WriteLong(file, 3) #chunktype
+    WriteLong(file, size) #chunksize
+	
+    for norm in normals:
+        WriteVector(file, norm)
+		
+def WriteMeshNormalCopyArray(file, size, normals):
+    WriteLong(file, 3073) #chunktype
     WriteLong(file, size) #chunksize
 	
     for norm in normals:
@@ -637,12 +667,163 @@ def WriteAABTree(file, size, aabtree):
     nodeSize = len(aabtree.nodes) * 32
     if nodeSize > 0:
         WriteAABTreeNodes(file, nodeSize, aabtree.nodes)
+		
+#######################################################################################
+# Mesh
+#######################################################################################	
+
+def WriteMeshHeader(file, size, header): 
+    WriteLong(file, 31) #chunktype
+    WriteLong(file, size) #chunksize
 	
+    print("## Name: " + header.meshName)
+    WriteLong(file, MakeVersion(header.version)) 
+    WriteLong(file, header.attrs) 
+    WriteFixedString(file, header.meshName)
+    WriteFixedString(file, header.containerName)
+    WriteLong(file, header.faceCount) 
+    WriteLong(file, header.vertCount) 
+    WriteLong(file, header.matlCount)
+    WriteLong(file, header.damageStageCount)
+    WriteLong(file, header.sortLevel)
+    WriteLong(file, header.prelitVersion)
+    WriteLong(file, header.futureCount) 
+    WriteLong(file, header.vertChannelCount) 
+    WriteLong(file, header.faceChannelCount) 
+    WriteVector(file, header.minCorner) 
+    WriteVector(file, header.maxCorner) 
+    WriteVector(file, header.sphCenter) 
+    WriteFloat(file, header.sphRadius) 
+	
+def WriteMesh(file, mesh):
+    print("\n### NEW MESH: ###")
+    WriteLong(file, 0) #chunktype
+	
+    headerSize = 116
+    vertSize = len(mesh.verts) * 12
+    vertCopySize = len(mesh.verts_copy) * 12
+    normSize = len(mesh.normals) * 12
+    normCopySize = len(mesh.normals_copy) * 12
+    faceSize = len(mesh.faces) * 32
+    shadeIndicesSize = len(mesh.verts) * 4
+    userTextSize = 0
+    if not mesh.userText ==  "":
+        userTextSize = len(mesh.userText) + 1
+    infSize = len(mesh.vertInfs) * 8
+    matSetInfoSize = 16
+    matArraySize = HEAD
+    textureArraySize = HEAD
+
+    for mat in mesh.vertMatls: 
+        matArraySize += HEAD + len(mat.vmName) + 1 + HEAD + 32
+        if len(mat.vmArgs0) > 0:
+            matArraySize += HEAD + len(mat.vmArgs0) + 1
+        if len(mat.vmArgs1) > 0:
+            matArraySize += HEAD + len(mat.vmArgs1) + 1
+			
+        if not mat.vmName == "":
+            for tex in mesh.textures:
+               textureArraySize += HEAD + len(tex.name) + 1 #+ HEAD + 12
+     
+    shaderArraySize = len(mesh.shaders) * 16
+	 
+    materialPassSize = (HEAD + len(mesh.matlPass.vmIds) * 4 + HEAD + len(mesh.matlPass.shaderIds) * 4)
+    if len(mesh.matlPass.dcg) > 0:
+        materialPassSize += HEAD + len(mesh.matlPass.dcg) * 4
+    if len(mesh.matlPass.txStage.txIds) > 0:		
+        materialPassSize += HEAD + HEAD + len(mesh.matlPass.txStage.txIds) * 4 + HEAD + len(mesh.matlPass.txStage.txCoords) * 8
+    bumpMapArraySize = (HEAD + 45 + 301 + len(mesh.bumpMaps.normalMap.entryStruct.diffuseTexName) + 1 + len(mesh.bumpMaps.normalMap.entryStruct.normalMap) + 1)
+	
+    aabtreeSize = HEAD + 8	
+    if mesh.aabtree.header.polyCount > 0:
+        aabtreeSize += HEAD + len(mesh.aabtree.polyIndices) * 4
+    if mesh.aabtree.header.nodeCount > 0:
+        aabtreeSize += HEAD + len(mesh.aabtree.nodes) * 32
+	
+	#size of the mesh chunk
+    size = HEAD + headerSize 
+    size += HEAD + vertSize 
+    if vertCopySize > 0:
+        size += HEAD + vertCopySize
+    size += HEAD + normSize 
+    if  normCopySize > 0:
+        size += HEAD + normCopySize
+    size += HEAD + faceSize 
+    size += HEAD + shadeIndicesSize
+    if not mesh.userText ==  "":
+        size += HEAD + userTextSize
+    if len(mesh.vertInfs) > 0:
+        size += HEAD + infSize 
+    size += HEAD + matSetInfoSize 
+    if mesh.matInfo.vertMatlCount > 0:
+        size += HEAD + matArraySize
+    if mesh.matInfo.textureCount > 0:
+        size += HEAD + textureArraySize 
+    if mesh.matInfo.shaderCount > 0:
+        size += HEAD + shaderArraySize
+    if mesh.matInfo.passCount > 0:
+        size += HEAD + materialPassSize
+    if not mesh.bumpMaps.normalMap.entryStruct.diffuseTexName == "":
+        size += HEAD + bumpMapArraySize
+    if (mesh.aabtree.header.nodeCount > 0) or (mesh.aabtree.header.polyCount > 0):
+        size += HEAD + aabtreeSize
+    
+    WriteLong(file, MakeChunkSize(size)) #chunksize
+	
+    WriteMeshHeader(file, headerSize, mesh.header)
+    print("Header")
+    WriteMeshVerticesArray(file, vertSize, mesh.verts)
+    print("Vertices")
+    if vertCopySize > 0:
+        WriteMeshVerticesCopyArray(file, vertCopySize, mesh.verts_copy)
+        print("Vertices Copy")
+    WriteMeshNormalArray(file, normSize, mesh.normals)
+    print("Normals")
+    if normCopySize > 0:
+        WriteMeshNormalCopyArray(file, normCopySize, mesh.normals_copy)
+        print("Normals Copy")
+    WriteMeshFaceArray(file, faceSize, mesh.faces)
+    print("Faces")
+    if not mesh.userText ==  "":
+        WriteLong(file, 12) #chunktype
+        WriteLong(file, userTextSize) #chunksize
+        WriteString(file, mesh.userText)
+        print("UserText")
+    if len(mesh.vertInfs) > 0:
+        WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
+        print("Vertex Influences")
+		
+    WriteLong(file, 34) #chunktype
+    WriteLong(file, shadeIndicesSize) #chunksize
+    WriteLongArray(file, mesh.shadeIds)
+    print("VertexShadeIndices")
+	
+    WriteMeshMaterialSetInfo(file, matSetInfoSize, mesh.matInfo)
+    print("MaterialSetInfo")
+    if mesh.matInfo.vertMatlCount > 0:
+        WriteMeshMaterialArray(file, matArraySize, mesh.vertMatls)
+        print("Materials")
+    if mesh.matInfo.shaderCount > 0:
+        WriteMeshShaderArray(file, shaderArraySize, mesh.shaders)
+        print("Shader")
+    if mesh.matInfo.textureCount > 0:
+        WriteTextureArray(file, textureArraySize, mesh.textures)
+        print("Textures")
+    if mesh.matInfo.passCount > 0:
+        WriteMeshMaterialPass(file, materialPassSize, mesh.matlPass)
+        print("MaterialPass")
+    if not mesh.bumpMaps.normalMap.entryStruct.normalMap == "":
+        WriteMeshBumpMapArray(file, bumpMapArraySize, mesh.bumpMaps)
+        print("BumpMaps")
+    if (mesh.aabtree.header.nodeCount > 0) or (mesh.aabtree.header.polyCount > 0):
+        WriteAABTree(file, aabtreeSize, mesh.aabtree)
+        print("AABTree")
+		
 #######################################################################################
 # Mesh Sphere
 #######################################################################################	
 
-def CalculateMeshSphere(mesh, Header):
+def calculateMeshSphere(mesh, Header):
     # get the point with the biggest distance to x and store it in y
     x = mesh.vertices[0]
     y = mesh.vertices[1]
@@ -678,149 +859,30 @@ def CalculateMeshSphere(mesh, Header):
             m += (Vector(v.co.xyz - m)).normalized() * delta  	 	
     Header.sphCenter = m
     Header.sphRadius = radius
-	
+
+    
 #######################################################################################
-# Mesh
-#######################################################################################	
+# compare the hierarchy with the existing skl file
+#######################################################################################		
 
-def WriteMeshHeader(file, size, header): 
-    WriteLong(file, 31) #chunktype
-    WriteLong(file, size) #chunksize
-	
-    print("## Name: " + header.meshName)
-    WriteLong(file, MakeVersion(header.version)) 
-    WriteLong(file, header.attrs) 
-    WriteFixedString(file, header.meshName)
-    WriteFixedString(file, header.containerName)
-    WriteLong(file, header.faceCount) 
-    WriteLong(file, header.vertCount) 
-    WriteLong(file, header.matlCount)
-    WriteLong(file, header.damageStageCount)
-    WriteLong(file, header.sortLevel)
-    WriteLong(file, header.prelitVersion)
-    WriteLong(file, header.futureCount) 
-    WriteLong(file, header.vertChannelCount) 
-    WriteLong(file, header.faceChannelCount) 
-    WriteVector(file, header.minCorner) 
-    WriteVector(file, header.maxCorner) 
-    WriteVector(file, header.sphCenter) 
-    WriteFloat(file, header.sphRadius) 
-	
-def WriteMesh(file, mesh):
-    print("### NEW MESH: ###")
-    WriteLong(file, 0) #chunktype
-	
-    headerSize = 116
-    vertSize = len(mesh.verts) * 12
-    normSize = len(mesh.normals) * 12
-    faceSize = len(mesh.faces) * 32
-    shadeIndicesSize = len(mesh.verts) * 4
-    userTextSize = 0
-    if not mesh.userText ==  "":
-        userTextSize = len(mesh.userText) + 1
-    infSize = len(mesh.vertInfs) * 8
-    matSetInfoSize = 16
-    matArraySize = HEAD
-    textureArraySize = HEAD
+def compareHierarchy(sklPath, Hierarchy, self, context):
+    skl = import_w3d.LoadSKL(self, sklPath)
+    #test if all pivots from the mesh are in the skl file 
+    for pivot in Hierarchy.pivots:
+        found = false
+        for p in skl.pivots:
+            if pivot.name.equals(p.name):
+                found = true
+        if not found:
+            context.report({'ERROR'}, "missing pivot " + pivot.name + " in .skl file!")
+            print("Error: missing pivot " + pivot.name + " in .skl file!")   
+    return true			
 
-    for mat in mesh.vertMatls: 
-        matArraySize += HEAD + len(mat.vmName) + 1 + HEAD + 32
-        if len(mat.vmArgs0) > 0:
-            matArraySize += HEAD + len(mat.vmArgs0) + 1
-        if len(mat.vmArgs1) > 0:
-            matArraySize += HEAD + len(mat.vmArgs1) + 1
-			
-        if not mat.vmName == "":
-            for tex in mesh.textures:
-               textureArraySize += HEAD + len(tex.name) + 1 #+ HEAD + 12
-     
-    shaderArraySize = len(mesh.shaders) * 16
-	 
-    materialPassSize = (HEAD + len(mesh.matlPass.vmIds) * 4 + HEAD + len(mesh.matlPass.shaderIds) * 4)
-    if len(mesh.matlPass.txStage.txIds) > 0:		
-        materialPassSize += HEAD + HEAD + len(mesh.matlPass.txStage.txIds) * 4 + HEAD + len(mesh.matlPass.txStage.txCoords) * 8
-    bumpMapArraySize = (HEAD + 45 + 301 + len(mesh.bumpMaps.normalMap.entryStruct.diffuseTexName) + 1 + len(mesh.bumpMaps.normalMap.entryStruct.normalMap) + 1)
-	
-    aabtreeSize = HEAD + 8	
-    if mesh.aabtree.header.polyCount > 0:
-        aabtreeSize += HEAD + len(mesh.aabtree.polyIndices) * 4
-    if mesh.aabtree.header.nodeCount > 0:
-        aabtreeSize += HEAD + len(mesh.aabtree.nodes) * 32
-	
-	#size of the mesh chunk
-    size = HEAD + headerSize 
-    size += HEAD + vertSize 
-    size += HEAD + normSize 
-    size += HEAD + faceSize 
-    size += HEAD + shadeIndicesSize
-    if not mesh.userText ==  "":
-        size += HEAD + userTextSize
-    if len(mesh.vertInfs) > 0:
-        size += HEAD + infSize 
-    size += HEAD + matSetInfoSize 
-    if mesh.matInfo.vertMatlCount > 0:
-        size += HEAD + matArraySize
-    if mesh.matInfo.textureCount > 0:
-        size += HEAD + textureArraySize 
-    if mesh.matInfo.shaderCount > 0:
-        size += HEAD + shaderArraySize
-    if mesh.matInfo.passCount > 0:
-        size += HEAD + materialPassSize
-    if not mesh.bumpMaps.normalMap.entryStruct.diffuseTexName == "":
-        size += HEAD + bumpMapArraySize
-    if (mesh.aabtree.header.nodeCount > 0 or mesh.aabtree.header.polyCount > 0):
-        size += HEAD + aabtreeSize
-    
-    WriteLong(file, MakeChunkSize(size)) #chunksize
-	
-    WriteMeshHeader(file, headerSize, mesh.header)
-    print("Header")
-    WriteMeshVerticesArray(file, vertSize, mesh.verts)
-    print("Vertices")
-    WriteMeshNormalArray(file, normSize, mesh.normals)
-    print("Normals")
-    WriteMeshFaceArray(file, faceSize, mesh.faces)
-    print("Faces")
-    if not mesh.userText ==  "":
-        WriteLong(file, 12) #chunktype
-        WriteLong(file, userTextSize) #chunksize
-        WriteString(file, mesh.userText)
-        print("UserText")
-    if len(mesh.vertInfs) > 0:
-        WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
-        print("Vertex Influences")
-		
-    WriteLong(file, 34) #chunktype
-    WriteLong(file, shadeIndicesSize) #chunksize
-    WriteLongArray(file, mesh.shadeIds)
-    print("VertexShadeIndices")
-	
-    WriteMeshMaterialSetInfo(file, matSetInfoSize, mesh.matInfo)
-    print("MaterialSetInfo")
-    if mesh.matInfo.vertMatlCount > 0:
-        WriteMeshMaterialArray(file, matArraySize, mesh.vertMatls)
-        print("Materials")
-    if mesh.matInfo.shaderCount > 0:
-        WriteMeshShaderArray(file, shaderArraySize, mesh.shaders)
-        print("Shader")
-    if mesh.matInfo.textureCount > 0:
-        WriteTextureArray(file, textureArraySize, mesh.textures)
-        print("Textures")
-    if mesh.matInfo.passCount > 0:
-        WriteMeshMaterialPass(file, materialPassSize, mesh.matlPass)
-        print("MaterialPass")
-    if not mesh.bumpMaps.normalMap.entryStruct.normalMap == "":
-        WriteMeshBumpMapArray(file, bumpMapArraySize, mesh.bumpMaps)
-        print("BumpMaps")
-    if (mesh.aabtree.header.nodeCount > 0 or mesh.aabtree.header.polyCount > 0):
-        WriteAABTree(file, aabtreeSize, mesh.aabtree)
-        print("AABTree")
-    
 #######################################################################################
 # Main Export
 #######################################################################################	
 
-def MainExport(givenfilepath, self, context):
+def MainExport(givenfilepath, self, context, EXPORT_MODE = 'HM', USE_SKL_FILE = False, OBJECTS = ''):
     print("Run Export")
     HLod = struct_w3d.HLod()
     HLod.lodArray.subObjects = []
@@ -835,17 +897,13 @@ def MainExport(givenfilepath, self, context):
     if bpy.ops.object.mode_set.poll():
         bpy.ops.object.mode_set(mode='OBJECT')
 		
-    #make sure the skin file ends with _skn.w3d
-    if not givenfilepath.endswith("_skn.w3d"):
-        givenfilepath = givenfilepath.replace(".w3d", "_skn.w3d")
+    #make sure the skin file ends with _skn.w3d -> not needed
+    #if not givenfilepath.endswith("_skn.w3d"):
+    #    givenfilepath = givenfilepath.replace(".w3d", "_skn.w3d")
     sknFile = open(givenfilepath, "wb")
 	
     # Get all the armatures in the scene.
-    sklName = ""
     rigList = [object for object in bpy.context.scene.objects if object.type == 'ARMATURE']
-    if len(rigList) > 0:
-        sklFile = open(givenfilepath.replace("skn", "skl"),"wb")
-        sklName = (os.path.splitext(os.path.basename(sklFile.name))[0]).upper()
     for rig in rigList:
         for bone in rig.pose.bones:
              pivot = struct_w3d.HierarchyPivot()
@@ -860,20 +918,16 @@ def MainExport(givenfilepath, self, context):
              pivot.rotation = bone.rotation_quaternion
              Hierarchy.pivots.append(pivot)		
 	
-    # Get all the mesh objects in the scene.
-    objList = [object for object in bpy.context.scene.objects if object.type == 'MESH']
+    objList = []
+    if EXPORT_MODE == 'SM':
+        objList.append(bpy.context.scene.objects[OBJECTS])
+    else:
+        # Get all the mesh objects in the scene.
+        objList = [object for object in bpy.context.scene.objects if object.type == 'MESH']
+		
     containerName = (os.path.splitext(os.path.basename(sknFile.name))[0]).upper()
 	
-    myObs = []
-    #myObs.append(bpy.context.scene.objects['SHEATH'])
-    #myObs.append(bpy.context.scene.objects['SOLDIER'])
-    #myObs.append(bpy.context.scene.objects['ARMOR'])
-    #myObs.append(bpy.context.scene.objects['SWORD'])
-    #myObs.append(bpy.context.scene.objects['BOUNDINGBOX'])
-    #myObs.append(bpy.context.scene.objects['FORGED_BLADE'])
-    #myObs.append(bpy.context.scene.objects['BAT_SHIELD'])
-	
-    for mesh_ob in objList:
+    for mesh_ob in objList: 
         if mesh_ob.name == "BOUNDINGBOX":
             Box = struct_w3d.Box()
             Box.name = containerName + "." + mesh_ob.name
@@ -885,10 +939,10 @@ def MainExport(givenfilepath, self, context):
         else:
             Mesh = struct_w3d.Mesh()
             Header = struct_w3d.MeshHeader()
-            Mesh.aabtree = struct_w3d.MeshAABTree()
-            Mesh.aabtree.header = struct_w3d.AABTreeHeader()
             Mesh.bumpMaps = struct_w3d.MeshBumpMapArray()
-            Mesh.matInfo = struct_w3d.MeshMaterialSetInfo()			
+            Mesh.matInfo = struct_w3d.MeshMaterialSetInfo()		
+            Mesh.aabtree = struct_w3d.MeshAABTree()
+            Mesh.aabtree.header = struct_w3d.AABTreeHeader()			
 		
             verts = []
             normals = [] 
@@ -941,7 +995,7 @@ def MainExport(givenfilepath, self, context):
                     context.report({'ERROR'}, "max 2 bone influences per vertex supported!")
                     print("Error: max 2 bone influences per vertex supported!")
 	
-            CalculateMeshSphere(mesh, Header)
+            calculateMeshSphere(mesh, Header)
 			
             Mesh.verts = verts
             Mesh.normals = normals
@@ -967,7 +1021,7 @@ def MainExport(givenfilepath, self, context):
                 print("no userText")
 			
             Header.faceCount = len(faces)
-            Mesh.aabtree.header.polyCount = len(faces)
+            #Mesh.aabtree.header.polyCount = len(faces)
 			
 		    #uv coords
             bm = bmesh.new()
@@ -1062,19 +1116,33 @@ def MainExport(givenfilepath, self, context):
         HLod.lodArray.subObjects.append(subObject)
 
     Hierarchy.header.pivotCount = len(Hierarchy.pivots)
-    if not sklName == "":
-        Hierarchy.header.name = sklName
-        WriteHierarchy(sklFile, Hierarchy)
-        HLod.header.HTreeName = sklName
-        sklFile.close()
-    else:
+		
+    #test if we want to export a skeleton file or use an existing
+    sklName = (os.path.splitext(os.path.basename(givenfilepath.replace("skn", "skl")))[0]).upper()
+	
+    if EXPORT_MODE == 'HAM' or EXPORT_MODE == 'S':
+        if len(rigList) > 0:
+            if USE_SKL_FILE:
+                try:
+                    print(rigList[0].sklFile)
+                    if compareHierarchy(rigList[0].sklFile, Hierarchy, self, context):
+                        sklName = (os.path.splitext(os.path.basename(sklFile.name))[0]).upper()	
+                except:
+                    context.report({'ERROR'}, "armature object has no property: sklFile!")
+                    print("armature object has no property: sklFile!")	
+            else:
+                Hierarchy.header.name = sklName
+                WriteHierarchy(sklFile, Hierarchy)
+                HLod.header.HTreeName = sklName
+                sklFile.close()
+    elif EXPORT_MODE == 'HM':
         Hierarchy.header.name = containerName	  
         WriteHierarchy(sknFile, Hierarchy)
         HLod.header.HTreeName = containerName
 	
-    #test if we want to export a skeleton file
-    HLod.lodArray.header.modelCount = len(HLod.lodArray.subObjects)
-    HLod.header.modelName = containerName
-    WriteHLod(sknFile, HLod)
+    if not EXPORT_MODE == 'SM':
+        HLod.lodArray.header.modelCount = len(HLod.lodArray.subObjects)
+        HLod.header.modelName = containerName
+        WriteHLod(sknFile, HLod)
 	
     sknFile.close()

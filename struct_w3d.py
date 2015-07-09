@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 18.06.2015
+#Last Modification 08.07.2015
 #Structs of the W3D Format used in games by Westwood & EA
 from mathutils import Vector, Quaternion
 
@@ -25,8 +25,8 @@ class RGBA(Struct):
     a = 0
 	
 class Version(Struct):
-    major = 4 #to identify models exported by this tool (default is 5)
-    minor = 2
+    major = 6 #to identify models exported by this tool (default is 5)
+    minor = 0
 	
 #######################################################################################
 # Hierarchy
@@ -50,7 +50,7 @@ class HierarchyPivot(Struct):
 class Hierarchy(Struct):
     header = HierarchyHeader()
     pivots = []
-    pivot_fixups = [] #array of matrices but with what are they used for?
+    pivot_fixups = [] #array of matrices but what are they used for?
 	
 #######################################################################################
 # Animation
@@ -161,6 +161,7 @@ class MeshTextureStage(Struct):
 class MeshMaterialPass(Struct):
     vmIds = []
     shaderIds = []
+    dcg = []
     txStage = MeshTextureStage() #has to be an array
 	
 class VertexMaterial(Struct):
@@ -176,8 +177,8 @@ class VertexMaterial(Struct):
 class MeshMaterial(Struct):
     vmName = ""
     vmInfo = VertexMaterial()
-    vmArgs0 = "" #mapping
-    vmArgs1 = "" #mapping
+    vmArgs0 = "" #mapping / animation type of the texture
+    vmArgs1 = "" #mapping / animation type of the texture
 
 class MeshMaterialSetInfo(Struct):
     passCount = 1 #always 1
@@ -301,7 +302,9 @@ class MeshHeader(Struct):
 class Mesh(Struct):
     header = MeshHeader()
     verts = []
+    verts_copy = []
     normals = []
+    normals_copy = []
     vertInfs = []
     faces = []
     userText  = ""
