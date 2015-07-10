@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 08.07.2015
+#Last Modification 10.07.2015
 #Exports the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -10,7 +10,7 @@ import sys
 import bmesh
 from bpy.props import *
 from mathutils import Vector, Quaternion
-from . import struct_w3d
+from . import struct_w3d, import_w3d
 
 #TODO 
 
@@ -149,7 +149,7 @@ def WritePivotFixups(file, size, pivot_fixups):
         WriteVector(file, fixup)
 
 def WriteHierarchy(file, hierarchy):
-    print("\n### NEW HIERARCHY: ###")
+    #print("\n### NEW HIERARCHY: ###")
     WriteLong(file, 256) #chunktype
     
     headerSize = 36
@@ -162,9 +162,9 @@ def WriteHierarchy(file, hierarchy):
     WriteLong(file, MakeChunkSize(size)) #chunksize
 	
     WriteHierarchyHeader(file, headerSize, hierarchy.header)
-    print("Header")
+    #print("Header")
     WritePivots(file, pivotsSize, hierarchy.pivots)
-    print("Pivots")
+    #print("Pivots")
 	# still dont know what pivotFixups are for and what they are
     if pivotFixupsSize > 0:
         WritePivotFixups(file, pivotFixupsSize, hierarchy.pivot_fixups)
@@ -204,7 +204,7 @@ def WriteAnimationChannel(file, channel):
             WriteQuaternion(file, quat)
 
 def WriteAnimation(file, animation):
-    print("\n### NEW ANIMATION: ###")
+    #print("\n### NEW ANIMATION: ###")
     WriteLong(file, 512) #chunktype
 	
     headerSize = 44
@@ -216,7 +216,7 @@ def WriteAnimation(file, animation):
     WriteLong(file, MakeChunkSize(size)) #chunksize
 	
     WriteAnimationHeader(file, headerSize, animation.header)
-    print("Header")
+    #print("Header")
     for channel in animation.channels:
         WriteAnimationChannel(file, channel)
         print("Channel")
@@ -237,10 +237,9 @@ def WriteTimeCodedAnimVector(file, size, animVector):
     WriteLong(file, size) #chunksize
 	
     print("#####not implemented yet!!")
-    
-		
+   	
 def WriteCompressedAnimation(file, compAnimation):
-    print("\n### NEW COMPRESSED ANIMATION: ###")
+    #print("\n### NEW COMPRESSED ANIMATION: ###")
     WriteLong(file, 640) #chunktype
 	
     headerSize = 44
@@ -252,7 +251,7 @@ def WriteCompressedAnimation(file, compAnimation):
     WriteLong(file, size) #chunksize
 
     WriteCompressedAnimationHeader(file, headerSize, compAnimation.header)	
-    print("Header")
+    #print("Header")
     #for vec in compAnimation.animVectors:
         #WriteTimeCodedAnimVector(file, vec)
         #print("AnimVector")
@@ -293,7 +292,7 @@ def WriteHLodArray(file, size, lodArray, headerSize, subObjectSize):
         WriteHLodSubObject(file, subObjectSize, object)
 
 def WriteHLod(file, hlod):
-    print("\n### NEW HLOD: ###")
+    #print("\n### NEW HLOD: ###")
     WriteLong(file, 1792) #chunktype
 	
     headerSize = 40
@@ -305,9 +304,9 @@ def WriteHLod(file, hlod):
     WriteLong(file, MakeChunkSize(size)) #chunksize
 	
     WriteHLodHeader(file, headerSize, hlod.header)
-    print("Header")
+    #print("Header")
     WriteHLodArray(file, arraySize, hlod.lodArray, arrayHeaderSize, subObjectSize)
-    print("Array")
+    #print("Array")
 	
 #######################################################################################
 # Box
@@ -329,7 +328,7 @@ def WriteBox(file, box):
 #######################################################################################	
 	
 def WriteTexture(file, texture):
-    print(texture.name)
+    #print(texture.name)
     WriteLong(file, 49) #chunktype
     WriteLong(file,  MakeChunkSize(HEAD + len(texture.name) + 1))# + HEAD + 12)) #chunksize
 	
@@ -676,7 +675,7 @@ def WriteMeshHeader(file, size, header):
     WriteLong(file, 31) #chunktype
     WriteLong(file, size) #chunksize
 	
-    print("## Name: " + header.meshName)
+    #print("## Name: " + header.meshName)
     WriteLong(file, MakeVersion(header.version)) 
     WriteLong(file, header.attrs) 
     WriteFixedString(file, header.meshName)
@@ -696,7 +695,7 @@ def WriteMeshHeader(file, size, header):
     WriteFloat(file, header.sphRadius) 
 	
 def WriteMesh(file, mesh):
-    print("\n### NEW MESH: ###")
+    #print("\n### NEW MESH: ###")
     WriteLong(file, 0) #chunktype
 	
     headerSize = 116
@@ -771,53 +770,53 @@ def WriteMesh(file, mesh):
     WriteLong(file, MakeChunkSize(size)) #chunksize
 	
     WriteMeshHeader(file, headerSize, mesh.header)
-    print("Header")
+    #print("Header")
     WriteMeshVerticesArray(file, vertSize, mesh.verts)
-    print("Vertices")
+    #print("Vertices")
     if vertCopySize > 0:
         WriteMeshVerticesCopyArray(file, vertCopySize, mesh.verts_copy)
-        print("Vertices Copy")
+        #print("Vertices Copy")
     WriteMeshNormalArray(file, normSize, mesh.normals)
-    print("Normals")
+    #print("Normals")
     if normCopySize > 0:
         WriteMeshNormalCopyArray(file, normCopySize, mesh.normals_copy)
-        print("Normals Copy")
+        #print("Normals Copy")
     WriteMeshFaceArray(file, faceSize, mesh.faces)
-    print("Faces")
+    #print("Faces")
     if not mesh.userText ==  "":
         WriteLong(file, 12) #chunktype
         WriteLong(file, userTextSize) #chunksize
         WriteString(file, mesh.userText)
-        print("UserText")
+        #print("UserText")
     if len(mesh.vertInfs) > 0:
         WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
-        print("Vertex Influences")
+        #print("Vertex Influences")
 		
     WriteLong(file, 34) #chunktype
     WriteLong(file, shadeIndicesSize) #chunksize
     WriteLongArray(file, mesh.shadeIds)
-    print("VertexShadeIndices")
+    #print("VertexShadeIndices")
 	
     WriteMeshMaterialSetInfo(file, matSetInfoSize, mesh.matInfo)
-    print("MaterialSetInfo")
+    #print("MaterialSetInfo")
     if mesh.matInfo.vertMatlCount > 0:
         WriteMeshMaterialArray(file, matArraySize, mesh.vertMatls)
-        print("Materials")
+        #print("Materials")
     if mesh.matInfo.shaderCount > 0:
         WriteMeshShaderArray(file, shaderArraySize, mesh.shaders)
-        print("Shader")
+        #print("Shader")
     if mesh.matInfo.textureCount > 0:
         WriteTextureArray(file, textureArraySize, mesh.textures)
-        print("Textures")
+        #print("Textures")
     if mesh.matInfo.passCount > 0:
         WriteMeshMaterialPass(file, materialPassSize, mesh.matlPass)
-        print("MaterialPass")
+        #print("MaterialPass")
     if not mesh.bumpMaps.normalMap.entryStruct.normalMap == "":
         WriteMeshBumpMapArray(file, bumpMapArraySize, mesh.bumpMaps)
-        print("BumpMaps")
+        #print("BumpMaps")
     if (mesh.aabtree.header.nodeCount > 0) or (mesh.aabtree.header.polyCount > 0):
         WriteAABTree(file, aabtreeSize, mesh.aabtree)
-        print("AABTree")
+        #print("AABTree")
 		
 #######################################################################################
 # Mesh Sphere
@@ -859,31 +858,31 @@ def calculateMeshSphere(mesh, Header):
             m += (Vector(v.co.xyz - m)).normalized() * delta  	 	
     Header.sphCenter = m
     Header.sphRadius = radius
-
-    
+	
 #######################################################################################
 # compare the hierarchy with the existing skl file
 #######################################################################################		
 
 def compareHierarchy(sklPath, Hierarchy, self, context):
     skl = import_w3d.LoadSKL(self, sklPath)
-    #test if all pivots from the mesh are in the skl file 
+    #test if all pivots from the scene are in the skl file 
     for pivot in Hierarchy.pivots:
-        found = false
+        found = False
         for p in skl.pivots:
-            if pivot.name.equals(p.name):
-                found = true
+            if pivot.name == p.name:
+                found = True
         if not found:
             context.report({'ERROR'}, "missing pivot " + pivot.name + " in .skl file!")
             print("Error: missing pivot " + pivot.name + " in .skl file!")   
-    return true			
+            return False
+    return True			
 
 #######################################################################################
 # Main Export
 #######################################################################################	
 
 def MainExport(givenfilepath, self, context, EXPORT_MODE = 'HM', USE_SKL_FILE = False, OBJECTS = ''):
-    print("Run Export")
+    #print("Run Export")
     HLod = struct_w3d.HLod()
     HLod.lodArray.subObjects = []
     Hierarchy = struct_w3d.Hierarchy()
@@ -896,11 +895,6 @@ def MainExport(givenfilepath, self, context, EXPORT_MODE = 'HM', USE_SKL_FILE = 
 	#switch to object mode
     if bpy.ops.object.mode_set.poll():
         bpy.ops.object.mode_set(mode='OBJECT')
-		
-    #make sure the skin file ends with _skn.w3d -> not needed
-    #if not givenfilepath.endswith("_skn.w3d"):
-    #    givenfilepath = givenfilepath.replace(".w3d", "_skn.w3d")
-    sknFile = open(givenfilepath, "wb")
 	
     # Get all the armatures in the scene.
     rigList = [object for object in bpy.context.scene.objects if object.type == 'ARMATURE']
@@ -924,225 +918,261 @@ def MainExport(givenfilepath, self, context, EXPORT_MODE = 'HM', USE_SKL_FILE = 
     else:
         # Get all the mesh objects in the scene.
         objList = [object for object in bpy.context.scene.objects if object.type == 'MESH']
-		
-    containerName = (os.path.splitext(os.path.basename(sknFile.name))[0]).upper()
 	
-    for mesh_ob in objList: 
-        if mesh_ob.name == "BOUNDINGBOX":
-            Box = struct_w3d.Box()
-            Box.name = containerName + "." + mesh_ob.name
-            Box.center = mesh_ob.location
-            box_mesh = mesh_ob.to_mesh(bpy.context.scene, False, 'PREVIEW', calc_tessface = True)
-            Box.extend = Vector((box_mesh.vertices[0].co.x * 2, box_mesh.vertices[0].co.y * 2, box_mesh.vertices[0].co.z))
-			
-            WriteBox(sknFile, Box)
-        else:
-            Mesh = struct_w3d.Mesh()
-            Header = struct_w3d.MeshHeader()
-            Mesh.bumpMaps = struct_w3d.MeshBumpMapArray()
-            Mesh.matInfo = struct_w3d.MeshMaterialSetInfo()		
-            Mesh.aabtree = struct_w3d.MeshAABTree()
-            Mesh.aabtree.header = struct_w3d.AABTreeHeader()			
-		
-            verts = []
-            normals = [] 
-            faces = []
-            uvs = []
-            vertInfs = []
-            vertexShadeIndices = []
-
-            Header.meshName = mesh_ob.name
-            Header.containerName = containerName
-            mesh = mesh_ob.to_mesh(bpy.context.scene, False, 'PREVIEW', calc_tessface = True)
-		
-            triangulate(mesh)
-		
-            Header.vertCount = len(mesh.vertices)
-            Mesh.matlPass.txStage.txCoords = []
-            Mesh.vertInfs = []
-            group_lookup = {g.index: g.name for g in mesh_ob.vertex_groups}
-            groups = {name: [] for name in group_lookup.values()}
-            vertShadeIndex = 0
-            for v in mesh.vertices:
-                vertexShadeIndices.append(vertShadeIndex)
-                vertShadeIndex += 1
-                verts.append(v.co.xyz)
-                normals.append(v.normal)
-                Mesh.matlPass.txStage.txCoords.append((0.0, 0.0)) #just to fill the array 
-				
-				#vertex influences
-                vertInf = struct_w3d.MeshVertexInfluences()
-                if len(v.groups) > 0:
-				    #has to be this complicated, otherwise the vertex groups would be corrupted
-                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[0].group].name] #return an array of indices (in this case only one value)
-                    if len(ids) > 0:
-                        vertInf.boneIdx = ids[0]
-                    vertInf.boneInf = v.groups[0].weight
-                    Mesh.vertInfs.append(vertInf)
-                elif len(v.groups) > 1:
-                    #has to be this complicated, otherwise the vertex groups would be corrupted
-                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[0].group].name] #return an array of indices (in this case only one value)
-                    if len(ids) > 0:
-                        vertInf.boneIdx = ids[0]
-                    vertInf.boneInf = v.groups[0].weight
-                    #has to be this complicated, otherwise the vertex groups would be corrupted
-                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[1].group].name] #return an array of indices (in this case only one value)
-                    if len(ids) > 0:
-                        vertInf.boneIdx = ids[0]
-                    vertInf.xtraInf = v.groups[1].weight
-                    Mesh.vertInfs.append(vertInf)
-                elif len(v.groups) > 2: 
-                    context.report({'ERROR'}, "max 2 bone influences per vertex supported!")
-                    print("Error: max 2 bone influences per vertex supported!")
+    if not EXPORT_MODE == 'S':
+         #make sure the skin file ends with _skn.w3d -> not needed
+         #if not givenfilepath.endswith("_skn.w3d"):
+         #    givenfilepath = givenfilepath.replace(".w3d", "_skn.w3d")
 	
-            calculateMeshSphere(mesh, Header)
+        sknFile = open(givenfilepath, "wb")
+        containerName = (os.path.splitext(os.path.basename(sknFile.name))[0]).upper()
+		
+        for mesh_ob in objList: 
+            if mesh_ob.name == "BOUNDINGBOX":
+                Box = struct_w3d.Box()
+                Box.name = containerName + "." + mesh_ob.name
+                Box.center = mesh_ob.location
+                box_mesh = mesh_ob.to_mesh(bpy.context.scene, False, 'PREVIEW', calc_tessface = True)
+                Box.extend = Vector((box_mesh.vertices[0].co.x * 2, box_mesh.vertices[0].co.y * 2, box_mesh.vertices[0].co.z))
 			
-            Mesh.verts = verts
-            Mesh.normals = normals
-            Mesh.shadeIds = vertexShadeIndices
-            Header.minCorner = Vector((mesh_ob.bound_box[0][0], mesh_ob.bound_box[0][1], mesh_ob.bound_box[0][2]))
-            Header.maxCorner =  Vector((mesh_ob.bound_box[6][0], mesh_ob.bound_box[6][1], mesh_ob.bound_box[6][2]))
-
-            for face in mesh.polygons:
-                triangle = struct_w3d.MeshFace()
-                triangle.vertIds = [face.vertices[0], face.vertices[1], face.vertices[2]]
-                triangle.normal = face.normal
-                tri_x = (verts[face.vertices[0]].x + verts[face.vertices[1]].x + verts[face.vertices[2]].x)/3
-                tri_y = (verts[face.vertices[0]].y + verts[face.vertices[1]].y + verts[face.vertices[2]].y)/3
-                tri_z = (verts[face.vertices[0]].z + verts[face.vertices[1]].z + verts[face.vertices[2]].z)/3
-                tri_pos = Vector((tri_x, tri_y, tri_z))				
-                triangle.distance = (mesh_ob.location - tri_pos).length
-                faces.append(triangle)
-            Mesh.faces = faces
-			
-            try:
-                Mesh.userText = mesh_ob['userText'] 
-            except:
-                print("no userText")
-			
-            Header.faceCount = len(faces)
-            #Mesh.aabtree.header.polyCount = len(faces)
-			
-		    #uv coords
-            bm = bmesh.new()
-            bm.from_mesh(mesh)
-
-            uv_layer = bm.loops.layers.uv.verify()
-            #bm.faces.layers.tex.verify()
-			
-            index = 0
-            for f in bm.faces:
-                Mesh.matlPass.txStage.txCoords[Mesh.faces[index].vertIds[0]] = f.loops[0][uv_layer].uv
-                Mesh.matlPass.txStage.txCoords[Mesh.faces[index].vertIds[1]] = f.loops[1][uv_layer].uv
-                Mesh.matlPass.txStage.txCoords[Mesh.faces[index].vertIds[2]] = f.loops[2][uv_layer].uv
-                index+=1
-						
-            Mesh.matlPass.vmIds = []
-            Mesh.matlPass.shaderIds = []
-            Mesh.matlPass.txStage.txIds = []
-            Mesh.matlPass.vmIds.append(0)
-            Mesh.matlPass.shaderIds.append(0)
-            Mesh.matlPass.txStage.txIds.append(0)      
-					
-            #shader
-            shader = struct_w3d.MeshShader()
-            Mesh.shaders = []
-            Mesh.shaders.append(shader)
-            Mesh.matInfo.shaderCount = 1
-				
-            Mesh.vertMatls = [] 
-            Mesh.textures = [] 
-            meshMaterial = struct_w3d.MeshMaterial()
-            vertexMaterial = struct_w3d.VertexMaterial()
-			
-            for mat in mesh.materials:
-                matName = (os.path.splitext(os.path.basename(mat.name))[1])[1:]
-                if matName == "BumpMaterial":
-                    Mesh.matInfo.shaderCount = 0
-                    for tex in bpy.data.materials[mesh_ob.name + "." + matName].texture_slots:
-                        if not (tex == None):
-                            if '_NRM' in tex.name:
-                                Header.vertChannelCount = 99
-                                Mesh.bumpMaps.normalMap.entryStruct.normalMap = tex.name
-                            else:
-                                Mesh.bumpMaps.normalMap.entryStruct.diffuseTexName = tex.name	
-                else:
-                    Mesh.matInfo.vertMatlCount += 1
-                    meshMaterial.vmName = matName
-                    vertexMaterial.ambient = struct_w3d.RGBA(r = 255, g = 255, b = 255, a = 255)
-                    vertexMaterial.diffuse = struct_w3d.RGBA(r = int(mat.diffuse_color.r), g = int(mat.diffuse_color.g), b = int(mat.diffuse_color.b), a = 255)
-                    vertexMaterial.specular = struct_w3d.RGBA(r = int(mat.specular_color.r), g = int(mat.specular_color.g), b = int(mat.specular_color.b), a = 255)
-                    vertexMaterial.shininess = 1.0#mat.specular_intensity
-                    vertexMaterial.opacity = 1.0#mat.diffuse_intensity         
-                    meshMaterial.vmInfo = vertexMaterial
-                    Mesh.vertMatls.append(meshMaterial)
-                    if not meshMaterial.vmName == "":
-                        for tex in bpy.data.materials[mesh_ob.name + "." + meshMaterial.vmName].texture_slots:
-                            if not (tex == None):
-                                Mesh.matInfo.textureCount += 1
-                                texture = struct_w3d.Texture()
-                                texture.name = tex.name
-                                Mesh.textures.append(texture)
-
-            Header.matlCount = len(Mesh.vertMatls)
-			
-            if len(mesh_ob.vertex_groups) > 0:		 
-                Header.attrs = 163840 #type skin, cast shadow
-                Header.vertChannelCount = 19
+                WriteBox(sknFile, Box)
             else:
-                Header.attrs = 0 #type normal mesh
+                Mesh = struct_w3d.Mesh()
+                Header = struct_w3d.MeshHeader()
+                Mesh.bumpMaps = struct_w3d.MeshBumpMapArray()
+                Mesh.matInfo = struct_w3d.MeshMaterialSetInfo()		
+                Mesh.aabtree = struct_w3d.MeshAABTree()
+                Mesh.aabtree.header = struct_w3d.AABTreeHeader()			
+		
+                verts = []
+                normals = [] 
+                faces = []
+                uvs = []
+                vertInfs = []
+                vertexShadeIndices = []
+
+                Header.meshName = mesh_ob.name
+                Header.containerName = containerName
+                mesh = mesh_ob.to_mesh(bpy.context.scene, False, 'PREVIEW', calc_tessface = True)
+		
+                triangulate(mesh)
+		
+                Header.vertCount = len(mesh.vertices)
+                Mesh.matlPass.txStage.txCoords = []
+                Mesh.vertInfs = []
+                group_lookup = {g.index: g.name for g in mesh_ob.vertex_groups}
+                groups = {name: [] for name in group_lookup.values()}
+                vertShadeIndex = 0
+                for v in mesh.vertices:
+                    vertexShadeIndices.append(vertShadeIndex)
+                    vertShadeIndex += 1
+                    verts.append(v.co.xyz)
+                    normals.append(v.normal)
+                    Mesh.matlPass.txStage.txCoords.append((0.0, 0.0)) #just to fill the array 
 				
-                pivot = struct_w3d.HierarchyPivot()
-                pivot.name = mesh_ob.name
-                pivot.parentID = 0
-                if not mesh_ob.parent_bone == "":
-                    ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.parent_bone] #return an array of indices (in this case only one value)
-                    pivot.parentID = ids[0]
-                pivot.position = mesh_ob.location
-                pivot.eulerAngles = mesh_ob.rotation_euler
-                pivot.rotation = mesh_ob.rotation_quaternion
-                Hierarchy.pivots.append(pivot)	
+				    #vertex influences
+                    vertInf = struct_w3d.MeshVertexInfluences()
+                    if len(v.groups) > 0:
+				        #has to be this complicated, otherwise the vertex groups would be corrupted
+                        ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[0].group].name] #return an array of indices (in this case only one value)
+                        if len(ids) > 0:
+                            vertInf.boneIdx = ids[0]
+                        vertInf.boneInf = v.groups[0].weight
+                        Mesh.vertInfs.append(vertInf)
+                    elif len(v.groups) > 1:
+                        #has to be this complicated, otherwise the vertex groups would be corrupted
+                        ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[0].group].name] #return an array of indices (in this case only one value)
+                        if len(ids) > 0:
+                            vertInf.boneIdx = ids[0]
+                        vertInf.boneInf = v.groups[0].weight
+                        #has to be this complicated, otherwise the vertex groups would be corrupted
+                        ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.vertex_groups[v.groups[1].group].name] #return an array of indices (in this case only one value)
+                        if len(ids) > 0:
+                            vertInf.boneIdx = ids[0]
+                        vertInf.xtraInf = v.groups[1].weight
+                        Mesh.vertInfs.append(vertInf)
+                    elif len(v.groups) > 2: 
+                        context.report({'ERROR'}, "max 2 bone influences per vertex supported!")
+                        print("Error: max 2 bone influences per vertex supported!")
+	
+                calculateMeshSphere(mesh, Header)
 			
-            Mesh.header = Header			
-            WriteMesh(sknFile, Mesh)
+                Mesh.verts = verts
+                Mesh.normals = normals
+                Mesh.shadeIds = vertexShadeIndices
+                Header.minCorner = Vector((mesh_ob.bound_box[0][0], mesh_ob.bound_box[0][1], mesh_ob.bound_box[0][2]))
+                Header.maxCorner =  Vector((mesh_ob.bound_box[6][0], mesh_ob.bound_box[6][1], mesh_ob.bound_box[6][2]))
+
+                for face in mesh.polygons:
+                    triangle = struct_w3d.MeshFace()
+                    triangle.vertIds = [face.vertices[0], face.vertices[1], face.vertices[2]]
+                    triangle.normal = face.normal
+                    tri_x = (verts[face.vertices[0]].x + verts[face.vertices[1]].x + verts[face.vertices[2]].x)/3
+                    tri_y = (verts[face.vertices[0]].y + verts[face.vertices[1]].y + verts[face.vertices[2]].y)/3
+                    tri_z = (verts[face.vertices[0]].z + verts[face.vertices[1]].z + verts[face.vertices[2]].z)/3
+                    tri_pos = Vector((tri_x, tri_y, tri_z))				
+                    triangle.distance = (mesh_ob.location - tri_pos).length
+                    faces.append(triangle)
+                Mesh.faces = faces
 			
-        #HLod stuff
-        subObject = struct_w3d.HLodSubObject()
-        subObject.name = containerName + "." + mesh_ob.name
-        subObject.boneIndex = 0
-        ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.name] #return an array of indices (in this case only one value)
-        if len(ids) > 0:
-	        subObject.boneIndex = ids[0]
-        HLod.lodArray.subObjects.append(subObject)
+                try:
+                    Mesh.userText = mesh_ob['userText'] 
+                except:
+                    print("no userText")
+			
+                Header.faceCount = len(faces)
+                #Mesh.aabtree.header.polyCount = len(faces)
+			
+		        #uv coords
+                bm = bmesh.new()
+                bm.from_mesh(mesh)
+
+                uv_layer = bm.loops.layers.uv.verify()
+                #bm.faces.layers.tex.verify()
+			
+                index = 0
+                for f in bm.faces:
+                    Mesh.matlPass.txStage.txCoords[Mesh.faces[index].vertIds[0]] = f.loops[0][uv_layer].uv
+                    Mesh.matlPass.txStage.txCoords[Mesh.faces[index].vertIds[1]] = f.loops[1][uv_layer].uv
+                    Mesh.matlPass.txStage.txCoords[Mesh.faces[index].vertIds[2]] = f.loops[2][uv_layer].uv
+                    index+=1
+						
+                Mesh.matlPass.vmIds = []
+                Mesh.matlPass.shaderIds = []
+                Mesh.matlPass.txStage.txIds = []
+                Mesh.matlPass.vmIds.append(0)
+                Mesh.matlPass.shaderIds.append(0)
+                Mesh.matlPass.txStage.txIds.append(0)      
+					
+                #shader
+                shader = struct_w3d.MeshShader()
+                Mesh.shaders = []
+                Mesh.shaders.append(shader)
+                Mesh.matInfo.shaderCount = 1
+				
+                Mesh.vertMatls = [] 
+                Mesh.textures = [] 
+                meshMaterial = struct_w3d.MeshMaterial()
+                vertexMaterial = struct_w3d.VertexMaterial()
+			
+                for mat in mesh.materials:
+                    matName = (os.path.splitext(os.path.basename(mat.name))[1])[1:]
+                    if matName == "BumpMaterial":
+                        Mesh.matInfo.shaderCount = 0
+                        for tex in bpy.data.materials[mesh_ob.name + "." + matName].texture_slots:
+                            if not (tex == None):
+                                if '_NRM' in tex.name:
+                                    Header.vertChannelCount = 99
+                                    Mesh.bumpMaps.normalMap.entryStruct.normalMap = tex.name
+                                else:
+                                    Mesh.bumpMaps.normalMap.entryStruct.diffuseTexName = tex.name	
+                    else:
+                        Mesh.matInfo.vertMatlCount += 1
+                        meshMaterial.vmName = matName
+                        vertexMaterial.ambient = struct_w3d.RGBA(r = 255, g = 255, b = 255, a = 255)
+                        vertexMaterial.diffuse = struct_w3d.RGBA(r = int(mat.diffuse_color.r), g = int(mat.diffuse_color.g), b = int(mat.diffuse_color.b), a = 255)
+                        vertexMaterial.specular = struct_w3d.RGBA(r = int(mat.specular_color.r), g = int(mat.specular_color.g), b = int(mat.specular_color.b), a = 255)
+                        vertexMaterial.shininess = 1.0#mat.specular_intensity
+                        vertexMaterial.opacity = 1.0#mat.diffuse_intensity         
+                        meshMaterial.vmInfo = vertexMaterial
+                        Mesh.vertMatls.append(meshMaterial)
+                        if not meshMaterial.vmName == "":
+                            for tex in bpy.data.materials[mesh_ob.name + "." + meshMaterial.vmName].texture_slots:
+                                if not (tex == None):
+                                    Mesh.matInfo.textureCount += 1
+                                    texture = struct_w3d.Texture()
+                                    texture.name = tex.name
+                                    Mesh.textures.append(texture)
+
+                Header.matlCount = len(Mesh.vertMatls)
+			
+                if len(mesh_ob.vertex_groups) > 0:		 
+                    Header.attrs = 131072 #type skin
+                    Header.vertChannelCount = 19
+                else:
+                    Header.attrs = 0 #type normal mesh
+				
+                    pivot = struct_w3d.HierarchyPivot()
+                    pivot.name = mesh_ob.name
+                    pivot.parentID = 0
+                    if not mesh_ob.parent_bone == "":
+                        ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.parent_bone] #return an array of indices (in this case only one value)
+                        pivot.parentID = ids[0]
+                    pivot.position = mesh_ob.location
+                    pivot.eulerAngles = mesh_ob.rotation_euler
+                    pivot.rotation = mesh_ob.rotation_quaternion
+                    Hierarchy.pivots.append(pivot)	
+			       
+                Mesh.header = Header			
+                WriteMesh(sknFile, Mesh)
+			
+            #HLod stuff
+            subObject = struct_w3d.HLodSubObject()
+            subObject.name = containerName + "." + mesh_ob.name
+            subObject.boneIndex = 0
+            ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.name] #return an array of indices (in this case only one value)
+            if len(ids) > 0:
+	            subObject.boneIndex = ids[0]
+            HLod.lodArray.subObjects.append(subObject)
 
     Hierarchy.header.pivotCount = len(Hierarchy.pivots)
 		
     #test if we want to export a skeleton file or use an existing
-    sklName = (os.path.splitext(os.path.basename(givenfilepath.replace("skn", "skl")))[0]).upper()
+    sklPath = ""
+    if givenfilepath.endswith("skn.w3d"):
+        sklPath = givenfilepath.replace("skn", "skl")
+    else:
+        sklPath = givenfilepath.replace(".w3d", "_skl.w3d")
+    sklName = (os.path.splitext(os.path.basename(sklPath))[0]).upper()
 	
-    if EXPORT_MODE == 'HAM' or EXPORT_MODE == 'S':
-        if len(rigList) > 0:
-            if USE_SKL_FILE:
+    if EXPORT_MODE == 'HM' or EXPORT_MODE == 'HAM' or EXPORT_MODE == 'S':
+        if len(rigList) == 1:
+            if USE_SKL_FILE and not EXPORT_MODE == 'S':
                 try:
-                    print(rigList[0].sklFile)
-                    if compareHierarchy(rigList[0].sklFile, Hierarchy, self, context):
-                        sklName = (os.path.splitext(os.path.basename(sklFile.name))[0]).upper()	
+                    if compareHierarchy(rigList[0]['sklFile'], Hierarchy, self, context):
+                        sklName = (os.path.splitext(os.path.basename(rigList[0]['sklFile']))[0]).upper()	
+                        HLod.header.HTreeName = sklName
                 except:
                     context.report({'ERROR'}, "armature object has no property: sklFile!")
                     print("armature object has no property: sklFile!")	
+					
+                    #so save the skeleton to a new file
+                    sklFile = open(sklPath,"wb")
+                    Hierarchy.header.name = sklName
+                    WriteHierarchy(sklFile, Hierarchy)
+                    HLod.header.HTreeName = sklName
+                    sklFile.close()
             else:
+                sklFile = open(sklPath,"wb")
                 Hierarchy.header.name = sklName
                 WriteHierarchy(sklFile, Hierarchy)
                 HLod.header.HTreeName = sklName
                 sklFile.close()
-    elif EXPORT_MODE == 'HM':
-        Hierarchy.header.name = containerName	  
-        WriteHierarchy(sknFile, Hierarchy)
-        HLod.header.HTreeName = containerName
+				
+        elif len(rigList) > 1:
+            # if the rig list is > 1 then we always have to export a new skl file
+            sklFile = open(sklPath,"wb")
+            Hierarchy.header.name = sklName
+            WriteHierarchy(sklFile, Hierarchy)
+            HLod.header.HTreeName = sklNameskl
+            File.close()
+				
+		#write the hierarchy to the skn file (has no armature data)
+        elif not EXPORT_MODE == 'S':
+            Hierarchy.header.name = containerName	  
+            WriteHierarchy(sknFile, Hierarchy)
+            HLod.header.HTreeName = containerName
+			
+        else:
+            context.report({'ERROR'}, "no armature data available!!")
+            print("no armature data available!!")	
 	
-    if not EXPORT_MODE == 'SM':
+    if not (EXPORT_MODE == 'SM' or EXPORT_MODE == 'S'):
         HLod.lodArray.header.modelCount = len(HLod.lodArray.subObjects)
         HLod.header.modelName = containerName
         WriteHLod(sknFile, HLod)
-	
-    sknFile.close()
+
+    try:
+        sknFile.close()  
+    except:
+        print("")
