@@ -1019,9 +1019,9 @@ def loadBoneMesh(self, filepath):
         Faces.append(f.vertIds)
 
     #create the mesh
-    mesh = bpy.data.meshes.new(Mesh.header.containerName)
+    mesh = bpy.data.meshes.new("skl_bone")
     mesh.from_pydata(Vertices,[],Faces)
-    mesh_ob = bpy.data.objects.new(Mesh.header.meshName, mesh)
+    mesh_ob = bpy.data.objects.new("skl_bone", mesh)
     return mesh 
 	
 #######################################################################################
@@ -1070,13 +1070,13 @@ def createArmature(self, Hierarchy, amtName):
             bone.rotation_euler = pivot.eulerAngles
             bone.rotation_quaternion = pivot.rotation
             #bpy.data.objects["Bone"].scale = (4, 4, 4)
-            bone.custom_shape = bpy.data.objects["Bone"]
+            bone.custom_shape = bpy.data.objects["skl_bone"]
 
     bpy.ops.object.mode_set(mode = 'OBJECT')
 	
 	#delete the mesh afterwards
     for ob in bpy.context.scene.objects:
-        ob.select = ob.type == 'MESH' and ob.name.startswith("Bone")
+        ob.select = ob.type == 'MESH' and ob.name.startswith("skl_bone")
         bpy.ops.object.delete()
     return rig
 	
@@ -1269,8 +1269,12 @@ def MainImport(givenfilepath, context, self):
         if len(Meshes) > 0:
             #if a mesh is loaded set the armature invisible
             rig.hide = True
+			
+    # needed because sometimes the parent obj of an object is not yet loaded
+    waitObj = None
+    waitObj_parent = ""
 
-    for m in Meshes:			
+    for m in Meshes:	
         Vertices = m.verts
         Faces = []
 
@@ -1278,7 +1282,7 @@ def MainImport(givenfilepath, context, self):
             Faces.append(f.vertIds)
 
         #create the mesh
-        mesh = bpy.data.meshes.new(m.header.containerName)
+        mesh = bpy.data.meshes.new(m.header.meshName)
         mesh.from_pydata(Vertices,[],Faces)
         mesh.uv_textures.new("UVW")
 
@@ -1301,6 +1305,11 @@ def MainImport(givenfilepath, context, self):
 
         mesh_ob = bpy.data.objects.new(m.header.meshName, mesh)
         mesh_ob['userText'] = m.userText
+		
+		#set the parent of the waiting object
+        if m.header.containerName == waitObj_parent:
+            waitObj.parent = mesh_ob
+            mesh_ob.parent_type = 'MESH'
 
 		#show the bounding boxes
         #mesh_ob.show_bounds = True
@@ -1360,16 +1369,17 @@ def MainImport(givenfilepath, context, self):
             #        0      -> normal mesh
 			#        8192   -> normal mesh - two sided
             #        32768  -> normal mesh - cast shadow
+            #        40960  -> normal mesh - two sided - cast shadow
             #        131072 -> skin
             #        139264 -> skin - two sided
 			#        143360 -> skin - two sided - hidden
 			#        163840 -> skin - cast shadow
             #        172032 -> skin - two sided - cast shadow
             type = m.header.attrs
-            if type == 8192 or type == 139264 or type == 143360 or type == 172032:
+            if type == 8192 or type == 40960 or type == 139264 or type == 143360 or type == 172032:
                 mesh.show_double_sided = True
 				
-            if type == 0 or type == 8192 or type == 32768:
+            if type == 0 or type == 8192 or type == 32768 or type == 40960:
                 for pivot in Hierarchy.pivots:
                     if m.header.meshName == pivot.name:
                         mesh_ob.rotation_mode = 'QUATERNION'
@@ -1380,9 +1390,17 @@ def MainImport(givenfilepath, context, self):
                         #test if the pivot has a parent pivot and parent the corresponding bone to the mesh if it has
                         if pivot.parentID > 0:
                             parent_pivot = Hierarchy.pivots[pivot.parentID]
-                            mesh_ob.parent = bpy.data.objects[amtName]
-                            mesh_ob.parent_bone = parent_pivot.name
-                            mesh_ob.parent_type = 'BONE'
+                            if pivot.isBone:
+                                mesh_ob.parent = bpy.data.objects[amtName]
+                                mesh_ob.parent_bone = parent_pivot.name
+                                mesh_ob.parent_type = 'BONE'
+                            else:
+                                try:
+                                    mesh_ob.parent = bpy.data.objects[parent_pivot.name]
+                                    mesh_ob.parent_type = 'MESH'
+                                except:
+                                    waitObj = mesh_ob
+                                    waitObj_parent = parent_pivot.name
 
             elif type == 131072 or type == 139264 or type == 143360 or type == 163840 or type == 172032:
                 for pivot in Hierarchy.pivots:
