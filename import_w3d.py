@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 10.07.2015
+#Last Modification 13.07.2015
 #Loads the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -10,7 +10,7 @@ import sys
 import bmesh
 from bpy.props import *
 from mathutils import Vector, Quaternion
-from . import struct_w3d #,export_w3d
+from . import struct_w3d 
 
 #bpy.data.window_managers["WinMan"].key_uvs
 #bpy.ops.anim.insert_keyframe_animall()
@@ -39,7 +39,7 @@ from . import struct_w3d #,export_w3d
 
 # support for 2 bone vertex influences (are they even used?) (mucavtroll)
 
-# calculate only the keyframes for each pivot at animation import ??
+# calculate only the keyframes for each pivot at animation import (possible?)??
 
 # unknown chunks:
 #	64 size of 4 bytes
@@ -233,8 +233,12 @@ def ReadTimeCodedAnimVector(file, self, chunkEnd):
     VectorLen = ReadUnsignedByte(file)
     Flag = ReadUnsignedByte(file) #is x or y or z or quat
     TimeCodesCount = ReadShort(file) #number of time codes in this chunk max is numFrames
-    #print(MagicNum, VectorLen, TimeCodesCount)
     Pivot = ReadShort(file)
+    print(MagicNum, VectorLen, TimeCodesCount, Pivot)
+    # -> 8 bytes read till here
+	
+    # 1 2 4 8 16 32 64 128 256 512
+	
     # will be (NumTimeCodes * ((VectorLen * sizeof(uint32)) + sizeof(uint32)))
 	# size magicNum vecLen	TimeCodesCount  ueberschuss
 	# 16   0        1 		1        		4
@@ -257,7 +261,10 @@ def ReadTimeCodedAnimVector(file, self, chunkEnd):
 
     if VectorLen == 1:
         while file.tell() < chunkEnd:
-            Data.append(ReadSignedByte(file) / MagicNum)
+            if Pivot == 1:
+                print(ReadFloat(file))
+            else:
+                Data.append(ReadSignedByte(file) / MagicNum)
     elif VectorLen == 4:
         while file.tell() < chunkEnd:
             Data.append(ReadCompressedQuaternion(file, MagicNum))
@@ -270,11 +277,12 @@ def ReadTimeCodedAnimVector(file, self, chunkEnd):
 		timeCodesCount = TimeCodesCount, pivot = Pivot, data = Data)
 		
 def ReadCompressedAnimation(file, self, chunkEnd):
-    #print("\n### NEW COMPRESSED ANIMATION: ###")
+    print("\n### NEW COMPRESSED ANIMATION: ###")
     Header = struct_w3d.CompressedAnimationHeader()
     AnimVectors = []
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
+        print(chunkType)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
         if chunkType == 641:
@@ -1076,8 +1084,8 @@ def createArmature(self, Hierarchy, amtName):
 	
 	#delete the mesh afterwards
     for ob in bpy.context.scene.objects:
-        ob.select = ob.type == 'MESH' and ob.name.startswith("skl_bone")
-        bpy.ops.object.delete()
+        if ob.type == 'MESH' and ob.name.startswith("skl_bone"):
+            ob.delete()
     return rig
 	
 #######################################################################################
@@ -1265,7 +1273,8 @@ def MainImport(givenfilepath, context, self):
                 found = True
         if not found:
             rig = createArmature(self, Hierarchy, amtName)
-            rig['sklFile'] = sklpath
+            rig.sklFile = sklpath
+			#rig['sklFile'] = sklpath
         if len(Meshes) > 0:
             #if a mesh is loaded set the armature invisible
             rig.hide = True
@@ -1308,8 +1317,9 @@ def MainImport(givenfilepath, context, self):
 		
 		#set the parent of the waiting object
         if m.header.containerName == waitObj_parent:
-            waitObj.parent = mesh_ob
-            mesh_ob.parent_type = 'MESH'
+            if not waitObj == None:
+                waitObj.parent = mesh_ob
+                mesh_ob.parent_type = 'MESH'
 
 		#show the bounding boxes
         #mesh_ob.show_bounds = True
