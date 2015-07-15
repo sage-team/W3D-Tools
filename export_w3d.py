@@ -267,7 +267,7 @@ def WriteHLodHeader(file, size, header):
     WriteLong(file, MakeVersion(header.version))
     WriteLong(file, header.lodCount)
     WriteFixedString(file, header.modelName)
-    WriteFixedString(file, "GUMAARMS_SKL") #header.HTreeName
+    WriteFixedString(file, header.HTreeName) 
 
 def WriteHLodArrayHeader(file, size, arrayHeader):
     WriteLong(file, 1795) #chunktype
@@ -1112,7 +1112,8 @@ def MainExport(givenfilepath, self, context, EXPORT_MODE = 'HM', USE_SKL_FILE = 
             subObject.boneIndex = 0
             ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.name] #return an array of indices (in this case only one value)
             if len(ids) > 0:
-	            subObject.boneIndex = ids[0]
+                if Header.attrs == 0 or Header.attrs == 8192 or Header.attrs == 32768 or Header.attrs == 40960:
+	                subObject.boneIndex = ids[0]
             HLod.lodArray.subObjects.append(subObject)
 
     Hierarchy.header.pivotCount = len(Hierarchy.pivots)
@@ -1154,7 +1155,7 @@ def MainExport(givenfilepath, self, context, EXPORT_MODE = 'HM', USE_SKL_FILE = 
             sklFile = open(sklPath,"wb")
             Hierarchy.header.name = sklName
             WriteHierarchy(sklFile, Hierarchy)
-            HLod.header.HTreeName = sklNameskl
+            HLod.header.HTreeName = sklName
             File.close()
 				
 		#write the hierarchy to the skn file (has no armature data)
@@ -1162,7 +1163,6 @@ def MainExport(givenfilepath, self, context, EXPORT_MODE = 'HM', USE_SKL_FILE = 
             Hierarchy.header.name = containerName	  
             WriteHierarchy(sknFile, Hierarchy)
             HLod.header.HTreeName = containerName
-			
         else:
             context.report({'ERROR'}, "no armature data available!!")
             print("no armature data available!!")	

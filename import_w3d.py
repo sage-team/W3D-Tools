@@ -226,6 +226,7 @@ def ReadCompressedAnimationHeader(file, chunkEnd):
 #seems the data is compressed to one byte per float which is modified by the MagicNum
 # needs to be tested
 def ReadTimeCodedAnimVector(file, self, chunkEnd):
+    #compression types from renx: adaptiveDelta  and TimeCoded
     Data = []
     MagicNum = ReadShort(file) #0 or 256 or 512
     if MagicNum == 0:
@@ -282,7 +283,6 @@ def ReadCompressedAnimation(file, self, chunkEnd):
     AnimVectors = []
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
-        print(chunkType)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
         if chunkType == 641:
@@ -1400,7 +1400,7 @@ def MainImport(givenfilepath, context, self):
                         #test if the pivot has a parent pivot and parent the corresponding bone to the mesh if it has
                         if pivot.parentID > 0:
                             parent_pivot = Hierarchy.pivots[pivot.parentID]
-                            if pivot.isBone:
+                            if parent_pivot.isBone:
                                 mesh_ob.parent = bpy.data.objects[amtName]
                                 mesh_ob.parent_bone = parent_pivot.name
                                 mesh_ob.parent_type = 'BONE'
@@ -1433,6 +1433,7 @@ def MainImport(givenfilepath, context, self):
                 mod.show_in_editmode = True
                 mod.show_on_cage = True
             else:
+                print("unsupported meshtype attribute: %i" %type)
                 self.report({'ERROR'}, "unsupported meshtype attribute: %i" %type)
         bpy.context.scene.objects.link(mesh_ob) # Link the object to the active scene
 

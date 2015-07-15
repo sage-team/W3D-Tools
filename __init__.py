@@ -23,7 +23,7 @@
 bl_info = {
     'name': 'Import/Export Westwood W3D Format (.w3d)',
     'author': 'Arathorn & Tarcontar',
-    'version': (0, 6, 0),
+    'version': (1, 0, 0),
     "blender": (2, 6, 0),
     "api": 36079,
     'location': 'File > Import/Export > Westerwood W3D (.w3d)',
@@ -52,13 +52,15 @@ from bpy_extras.io_utils import ImportHelper, ExportHelper
 
 
 class ImportW3D(bpy.types.Operator, ImportHelper):
-    '''Import from Westerwood 3D file format (.w3d)'''
-    bl_idname = 'import_mesh.westerwood_w3d'
+    '''Import from Westwood 3D file format (.w3d)'''
+    bl_idname = 'import_mesh.westwood_w3d'
     bl_label = 'Import W3D'
     bl_options = {'UNDO'}
-
+	
     filename_ext = '.w3d'
     filter_glob = StringProperty(default='*.w3d', options={'HIDDEN'})
+	
+    bpy.types.Object.sklFile = bpy.props.StringProperty(name = 'sklFile', options={'HIDDEN', 'SKIP_SAVE'})
 
     def execute(self, context):
         from . import import_w3d
@@ -76,13 +78,13 @@ def availableObjects(self, context):
     available_objects.clear() 
     for ob in bpy.data.objects:   
         name = ob.name   
-        if ob.type == 'MESH':
+        if ob.type == 'MESH' and not name == "skl_bone":
             available_objects.append((name, name, name))   
     return available_objects  
 
 class ExportW3D(bpy.types.Operator, ExportHelper):
-    '''Export from Westerwood 3D file format (.w3d)'''
-    bl_idname = 'export_mesh.westerwood_w3d'
+    '''Export from Westwood 3D file format (.w3d)'''
+    bl_idname = 'export_mesh.westwood_w3d'
     bl_label = 'Export W3D'
     bl_options = {'UNDO'}
 	
@@ -92,8 +94,8 @@ class ExportW3D(bpy.types.Operator, ExportHelper):
     EXPORT_MODE = EnumProperty(
             name="Export Mode",
             items=(('HM', "Hierarchical Model", "this will export a model without animation data"),
-                   ('HAM', "Hierarchical Animated Model", "this will export the model with geometry and animation data"),
-                   ('PA', "Pure Animation", "this will export the animation without any geometry data"),
+                   #('HAM', "Hierarchical Animated Model", "this will export the model with geometry and animation data"),
+                   #('PA', "Pure Animation", "this will export the animation without any geometry data"),
                    ('S', "Skeleton", "this will export the hierarchy tree without any geometry or animation data"),
                    ('SM', "Simple Mesh", "this will export a single mesh. if there is more than one mesh, only the first one will be exported")
                    ),
@@ -103,7 +105,7 @@ class ExportW3D(bpy.types.Operator, ExportHelper):
     USE_SKL_FILE = BoolProperty(
             name = "export using existing skeleton",
             description = "no new skeleton file is created",
-            default = False
+            default = True
             )
 
     OBJECTS = EnumProperty(name="the single mesh to export", items = availableObjects)		
