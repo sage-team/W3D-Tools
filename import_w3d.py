@@ -129,7 +129,7 @@ def ReadPivots(file, chunkEnd):
     while file.tell() < chunkEnd:
         pivot = struct_w3d.HierarchyPivot()
         pivot.name = ReadFixedString(file)
-        pivot.parentID = ReadSignedLong(file)
+        pivot.parentID = ReadLong(file)
         pivot.position = ReadVector(file)
         pivot.eulerAngles = ReadVector(file)
         pivot.rotation = ReadQuaternion(file)
@@ -225,12 +225,17 @@ def ReadTimeCodedAnimVector(file, self, chunkEnd):
     ### A time code is a uint32 that prefixes each vector
     ### the MSB is used to indicate a binary (non interpolated) movement
 	
-    #compression types from renx: adaptiveDelta  and TimeCoded
     Data = []
     MagicNum = ReadShort(file) #0 or 256 or 512 -> interpolation type?
     VectorLen = ReadUnsignedByte(file)
     Flag = ReadUnsignedByte(file) #is x or y or z or quat
     TimeCodesCount = ReadShort(file) # 1 or number of frames
+	
+   #   struct sTimeCodes
+   #  {
+   #      unsigned long Number;
+   #      float         Vector[MAX_LENGTH]; //unsigned long Vector[MAX_LENGTH];
+   #  } m_TimeCodes;
 	
     #Pivot = ReadShort(file)
     Pivot = ReadUnsignedByte(file)
@@ -243,18 +248,11 @@ def ReadTimeCodedAnimVector(file, self, chunkEnd):
         #print(TimeCodesCount)
         while file.tell() < chunkEnd:
             if file.tell() + 2 < chunkEnd:
-                #bytes = struct.unpack("<L", file.read(4))[0]
-                #bytes = file.read(4)
-                #print(struct.unpack("<I", file.read(4))[0])
-                #print(file.read(1) & 0x7FFFFFFF)
                 print(ReadUnsignedByte(file))
             else:
                 file.read(1)
     elif VectorLen == 4:
         while file.tell() < chunkEnd:
-            #TimeCode = ReadLong(file)
-            #Quat = ReadQuaternion(file)
-            #print(TimeCode, Quat)
             file.read(1)
     else:
         self.report({'ERROR'}, "!!!unsupported vector len %s" % VectorLen)
@@ -276,6 +274,8 @@ def ReadCompressedAnimation(file, self, chunkEnd):
         if chunkType == 641:
             Header = ReadCompressedAnimationHeader(file, subChunkEnd)
             print("#### numFrames %s" % Header.numFrames)
+        elif chunkType == 643:
+            
         elif chunkType == 644:
             print("####size %s" % (chunkSize - 8))
             AnimVectors.append(ReadTimeCodedAnimVector(file, self, subChunkEnd))	
@@ -973,11 +973,10 @@ def LoadTexture(self, givenfilepath, mesh, texName, tex_type, destBlend):
 def LoadSKL(self, sklpath):
     #print("\n### SKELETON: ###")
     Hierarchy = struct_w3d.Hierarchy()
-    file = open(sklpath,"rb")
+    file = open(sklpath, "rb")
     file.seek(0,2)
     filesize = file.tell()
     file.seek(0,0)
-    Chunknumber = 1
 
     while file.tell() < filesize:
         chunkType = ReadLong(file)
@@ -985,11 +984,9 @@ def LoadSKL(self, sklpath):
         chunkEnd = file.tell() + Chunksize
         if chunkType == 256:
             Hierarchy = ReadHierarchy(file, self, chunkEnd)
-            file.seek(chunkEnd,0)
+            file.seek(chunkEnd, 0)
         else:
-            file.seek(Chunksize,1)
-
-        Chunknumber += 1
+            file.seek(Chunksize, 1)
     file.close()
     return Hierarchy
 	
@@ -1243,7 +1240,7 @@ def MainImport(givenfilepath, context, self):
             self.report({'ERROR'}, "skeleton file not found: " + HLod.header.HTreeName) 
             print("!!! skeleton file not found: " + HLod.header.HTreeName)
 			
-    elif (not Animation.header.name == "") and Hierarchy.header.name == "":
+    elif (not Animation.header.name == "") and (Hierarchy.header.name == ""):
         sklpath = os.path.dirname(givenfilepath) + "\\" + Animation.header.hieraName.lower() + ".w3d"
         try:
             Hierarchy = LoadSKL(self, sklpath)
