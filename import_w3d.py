@@ -222,11 +222,11 @@ def ReadCompressedAnimationHeader(file, chunkEnd):
 		hieraName = ReadFixedString(file), numFrames = ReadLong(file), frameRate = ReadShort(file), flavor = ReadShort(file))
 
 def ReadTimeCodedAnimVector(file, self, chunkEnd):
-    ### A time code is a uint32 that prefixes each vector
-    ### the MSB is used to indicate a binary (non interpolated) movement
+    # A time code is a uint32 that prefixes each vector
+    # the MSB is used to indicate a binary (non interpolated) movement
 	
     Data = []
-    MagicNum = ReadShort(file) #0 or 256 or 512 -> interpolation type?
+    MagicNum = ReadShort(file) #0 or 256 or 512 -> interpolation type? /compression of the Q-Channels?  (0, 256, 512) -> (0, 8, 16 bit)
     VectorLen = ReadUnsignedByte(file)
     Flag = ReadUnsignedByte(file) #is x or y or z or quat
     TimeCodesCount = ReadShort(file) # 1 or number of frames
@@ -243,6 +243,8 @@ def ReadTimeCodedAnimVector(file, self, chunkEnd):
     #print(MagicNum, VectorLen, Flag, TimeCodesCount, Pivot)
 
     # will be (NumTimeCodes * ((VectorLen * 4) + 4)) -> works if the magic num is 0
+	
+    # so only the Q-Channels are compressed?
 
     if VectorLen == 1:
         #print(TimeCodesCount)
@@ -275,7 +277,8 @@ def ReadCompressedAnimation(file, self, chunkEnd):
             Header = ReadCompressedAnimationHeader(file, subChunkEnd)
             print("#### numFrames %s" % Header.numFrames)
         elif chunkType == 643:
-            
+            self.report({'ERROR'}, "unsupported chunktype in CompressedAnimation: %s" % chunkType)
+            print("!!!unsupported chunktype in CompressedAnimation: %s" % chunkType)
         elif chunkType == 644:
             print("####size %s" % (chunkSize - 8))
             AnimVectors.append(ReadTimeCodedAnimVector(file, self, subChunkEnd))	
