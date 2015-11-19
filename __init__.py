@@ -59,8 +59,6 @@ class ImportW3D(bpy.types.Operator, ImportHelper):
 	
     filename_ext = '.w3d'
     filter_glob = StringProperty(default='*.w3d', options={'HIDDEN'})
-	
-    bpy.types.Object.sklFile = bpy.props.StringProperty(name = 'sklFile', options={'HIDDEN', 'SKIP_SAVE'})
 
     def execute(self, context):
         from . import import_w3d
@@ -71,16 +69,6 @@ class ImportW3D(bpy.types.Operator, ImportHelper):
         t = time.mktime(datetime.datetime.now().timetuple()) - t
         print('Finished importing in', t, 'seconds')
         return {'FINISHED'}
-		
-available_objects = []
-		
-def availableObjects(self, context):   
-    available_objects.clear() 
-    for ob in bpy.data.objects:   
-        name = ob.name   
-        if ob.type == 'MESH' and not name == "skl_bone":
-            available_objects.append((name, name, name))   
-    return available_objects  
 
 class ExportW3D(bpy.types.Operator, ExportHelper):
     '''Export from Westwood 3D file format (.w3d)'''
@@ -93,42 +81,12 @@ class ExportW3D(bpy.types.Operator, ExportHelper):
 	
     EXPORT_MODE = EnumProperty(
             name="Export Mode",
-            items=(('HM', "Hierarchical Model", "this will export a model without animation data"),
-                   #('HAM', "Hierarchical Animated Model", "this will export the model with geometry and animation data"),
-                   #('PA', "Pure Animation", "this will export the animation without any geometry data"),
-                   ('S', "Skeleton", "this will export the hierarchy tree without any geometry or animation data"),
-                   ('SM', "Simple Mesh", "this will export a single mesh. if there is more than one mesh, only the first one will be exported")
-                   ),
-            default='HM',
-            )
-	
-    USE_SKL_FILE = BoolProperty(
-            name = "export using existing skeleton",
-            description = "no new skeleton file is created",
-            default = True
-            )
-
-    OBJECTS = EnumProperty(name="the single mesh to export", items = availableObjects)		
-			
-    def draw(self, context):
-        available_objects = availableObjects(self, context)
-        layout = self.layout
-
-        layout.prop(self, "EXPORT_MODE"),
-        sub = layout.column()
-        if (self.EXPORT_MODE == 'HM') or (self.EXPORT_MODE == 'HAM') or (self.EXPORT_MODE == 'PA'):
-            sub.enabled = True
-        else:
-            sub.enabled = False
-
-        sub.prop(self, "USE_SKL_FILE")
-		
-        sub = layout.column()
-        if (self.EXPORT_MODE == 'SM'):
-            sub.enabled = True
-        else:
-            sub.enabled = False
-        sub.prop(self, "OBJECTS")	
+             items=(('M', "Model", "this will export all the meshes of the scene, without skeletons or animation"), 
+			    ('S', "Skeleton", "this will export the hierarchy tree without any geometry or animation data"), 
+			    ('A', "Animation", "this will export the animation without any geometry data or skeletons"), 
+			    ('HAM', "HierarchicalAnimatedModel", "this will export the meshes with the hierarchy and animation into one file")
+			    ),			
+			default='M',)	
 		
     def execute(self, context):
         from . import export_w3d

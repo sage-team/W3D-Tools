@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 04.08.2015
+#Last Modification 18.11.2015
 #Loads the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -19,32 +19,23 @@ from . import struct_w3d
 
 #TODO 
 
-# make the property rig['sklFile'] not editable by the user
-
-# fix animations 
+# find a sollution for the mesh property 393216 - camera oriented (points _towards_ camera) -> obj property view_align == camera oriented??
 
 # support animated textures
 
 # read compressed animation data and create it
 
-# what are pivot fixups for -> used if the pivot data is corrupted (length of quaternion > 1)?
-
 # apply per vertex color from material pass
-
-# what are aabtrees for and how do they work -> for ingame picking 
-
-# what are shade indices and how do they work -> how the triangles are build from the vertices -> buffer for GPU
 
 # support for multiple textures for one mesh (also multiple uv maps)
 
 # support for 2 bone vertex influences (are they even used?) (mucavtroll)
 
-# calculate only the keyframes for each pivot at animation import (possible?)??
-
 # unknown chunks:
 #	64 size of 4 bytes
 #	96 vertex normals for bump mapping? (specular and diffuse normals)
 #	97 vertex normals for bump mapping? (specular and diffuse normals)
+
 
 #######################################################################################
 # Basic Methods
@@ -59,26 +50,29 @@ def ReadString(file):
     return (b"".join(bytes)).decode("utf-8")
 
 def ReadFixedString(file):
-    SplitString = ((str(file.read(16)))[2:16]).split("\\")
+    SplitString = ((str(file.read(16)))[2:18]).split("\\")
     return SplitString[0]
 
 def ReadLongFixedString(file):
-    SplitString = ((str(file.read(32)))[2:32]).split("\\")
+    SplitString = ((str(file.read(32)))[2:34]).split("\\")
     return SplitString[0]
 
 def ReadRGBA(file):
-    return struct_w3d.RGBA(r=ord(file.read(1)),g=ord(file.read(1)),b=ord(file.read(1)),a=ord(file.read(1)))
+    return struct_w3d.RGBA(r=ord(file.read(1)), g=ord(file.read(1)), b=ord(file.read(1)), a=ord(file.read(1)))
 
 def GetChunkSize(data):
     return (data & 0x7FFFFFFF)
 
 def ReadLong(file):
     #binary_format = "<l" long
-    return (struct.unpack("<L",file.read(4))[0])
+    return (struct.unpack("<L", file.read(4))[0])
 
 def ReadShort(file):
     #binary_format = "<h" short
-    return (struct.unpack("<H",file.read(2))[0])
+    return (struct.unpack("<H", file.read(2))[0])
+
+def ReadUnsignedShort(file):
+    return (struct.unpack("<h", file.read(2))[0])
 
 def ReadLongArray(file,chunkEnd):
     LongArray = []
@@ -88,7 +82,7 @@ def ReadLongArray(file,chunkEnd):
 
 def ReadFloat(file):
     #binary_format = "<f" float
-    return (struct.unpack("f",file.read(4))[0])
+    return (struct.unpack("f", file.read(4))[0])
 
 def ReadSignedByte(file):
     return (struct.unpack("<b", file.read(1))[0])
@@ -172,11 +166,12 @@ def ReadHierarchy(file, self, chunkEnd):
 # Animation
 #######################################################################################
 
-def ReadAnimationHeader(file, chunkEnd):
+def ReadAnimationHeader(file):
     return struct_w3d.AnimationHeader(version = GetVersion(ReadLong(file)), name = ReadFixedString(file), 
 		hieraName = ReadFixedString(file), numFrames = ReadLong(file), frameRate = ReadLong(file))
 
 def ReadAnimationChannel(file, self, chunkEnd):
+    print("Channel")
     FirstFrame = ReadShort(file)
     LastFrame = ReadShort(file)
     VectorLen = ReadShort(file)
@@ -199,7 +194,7 @@ def ReadAnimationChannel(file, self, chunkEnd):
 		type = Type, pivot = Pivot, pad = Pad, data = Data)
 
 def ReadAnimation(file, self, chunkEnd):
-    #print("\n### NEW ANIMATION: ###")
+    print("\n### NEW ANIMATION: ###")
     Header = struct_w3d.AnimationHeader()
     Channels = []
     while file.tell() < chunkEnd:
@@ -207,7 +202,7 @@ def ReadAnimation(file, self, chunkEnd):
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
         if chunkType == 513:
-            Header = ReadAnimationHeader(file, subChunkEnd)
+            Header = ReadAnimationHeader(file)
         elif chunkType == 514:
             Channels.append(ReadAnimationChannel(file, self, subChunkEnd))
         else:
@@ -217,76 +212,136 @@ def ReadAnimation(file, self, chunkEnd):
     return struct_w3d.Animation(header = Header, channels = Channels)
 
 
-def ReadCompressedAnimationHeader(file, chunkEnd):
+def ReadCompressedAnimationHeader(file):
     return struct_w3d.CompressedAnimationHeader(version = GetVersion(ReadLong(file)), name = ReadFixedString(file), 
 		hieraName = ReadFixedString(file), numFrames = ReadLong(file), frameRate = ReadShort(file), flavor = ReadShort(file))
 
-def ReadTimeCodedAnimVector(file, self, chunkEnd):
-    # A time code is a uint32 that prefixes each vector
-    # the MSB is used to indicate a binary (non interpolated) movement
-	
-    Data = []
-    MagicNum = ReadShort(file) #0 or 256 or 512 -> interpolation type? /compression of the Q-Channels?  (0, 256, 512) -> (0, 8, 16 bit)
+def ReadTimeCodedAnimationChannel(file, self, chunkEnd): # bfme I animation struct
+    TimeCodesCount = ReadLong(file)
+    Pivot = ReadShort(file)
     VectorLen = ReadUnsignedByte(file)
-    Flag = ReadUnsignedByte(file) #is x or y or z or quat
-    TimeCodesCount = ReadShort(file) # 1 or number of frames
+    Type = ReadUnsignedByte(file)
+    TimeCodedKeys = []
 	
-   #   struct sTimeCodes
-   #  {
-   #      unsigned long Number;
-   #      float         Vector[MAX_LENGTH]; //unsigned long Vector[MAX_LENGTH];
-   #  } m_TimeCodes;
-	
-    #Pivot = ReadShort(file)
-    Pivot = ReadUnsignedByte(file)
-	
-    #print(MagicNum, VectorLen, Flag, TimeCodesCount, Pivot)
+    while file.tell() < chunkEnd: 
+        Key = struct_w3d.TimeCodedAnimationKey()
+        Key.frame = ReadLong(file)
+        if Type == 6:
+            Key.value = ReadQuaternion(file)
+        else:
+            Key.value = ReadFloat(file)
+        TimeCodedKeys.append(Key)
+    return struct_w3d.TimeCodedAnimationChannel(timeCodesCount = TimeCodesCount, pivot = Pivot, vectorLen = VectorLen, type = Type,
+		timeCodedKeys = TimeCodedKeys)
+		
+def ReadTimeCodedBitChannel(file, self, chunkEnd): #-- channel of boolean values (e.g. visibility) - always size 16
+    TimeCodesCount = ReadLong(file)
+    Pivot = ReadShort(file)
+    Type = ReadUnsignedByte(file) #0 = vis, 1 = timecoded vis
+    DefaultValue = ReadUnsignedByte(file)
+    print(TimeCodesCount, Pivot, Type, DefaultValue)
+    values = []
 
-    # will be (NumTimeCodes * ((VectorLen * 4) + 4)) -> works if the magic num is 0
-	
-    # so only the Q-Channels are compressed?
+	#8 bytes left
+    while file.tell() < chunkEnd:
+        # dont yet know how to interpret this data
+        print(ReadUnsignedByte(file))
+		
+##test function
+def FromSageFloat16(s):
+    return ((s >> 8) * 10.0 + (s & 255) * 9.96000003814697 / 256.0);
+#return (float) ((double) (byte) ((uint) v >> 8) * 10.0 + (double) (byte) ((uint) v & (uint) byte.MaxValue) * 9.96000003814697 / 256.0);
+		
+def ReadTimeCodedAnimationVector(file, self, chunkEnd):
+    CompressionType = ReadShort(file) #0 or 256 or 512 -> 0, 8 or 16 bit
+    VectorLen = ReadUnsignedByte(file)
+    Type = ReadUnsignedByte(file) #is x or y or z or quat  #what is type 15?? (vecLen = 1)
+    TimeCodesCount = ReadShort(file) 
+    Pivot = ReadShort(file)
+    TimeCodedKeys = []
 
-    if VectorLen == 1:
-        #print(TimeCodesCount)
-        while file.tell() < chunkEnd:
-            if file.tell() + 2 < chunkEnd:
-                print(ReadUnsignedByte(file))
-            else:
-                file.read(1)
-    elif VectorLen == 4:
-        while file.tell() < chunkEnd:
+    if CompressionType == 0:
+        if Type == 6:
+            while file.tell() <= chunkEnd - 18: # 20:1 36:2 56:3 72:4 92:5 108:6 128:7 144:8 164:9 180:10 200:11 216:12   (18 + 2)
+                #print(ReadShort(file) | 0x8000)
+                #print(ReadUnsignedByte(file))
+                #print(ReadUnsignedByte(file))
+                #print(ReadShort(file))
+                #print(ReadQuaternion(file))
+                #print(ReadLong(file))
+                file.read(18)
+            if file.tell() < chunkEnd:
+                file.read(2) #padding (2 bytes if the TimeCodesCount is uneven)
+        else:
+            while file.tell() <= chunkEnd - 6: # 8:1 32:5 56:9  (6 + 2)
+                #Data.append(ReadShort(file)) #still some weird values in here
+                #Data.append(ReadFloat(file))
+                print(ReadShort(file))#| 0x80000000)
+                print(ReadFloat(file))
+                #print(FromSageFloat16(ReadShort(file)))
+                #file.read(2)
+            if file.tell() < chunkEnd:
+                file.read(2) #padding (2 bytes if the TimeCodesCount is uneven)
+				
+    #elif CompressionType == 256:
+    #    if Type == 6:
+    #        while file.tell() < chunkEnd: # 56:16 (92:21 92:30) (128:36 128:40 128:45) (200:66 200:75) (236:84 236:90) 308:117 344:144 380:157
+    #            #print(ReadUnsignedByte(file) & 0xFFFF)
+    #            #file.read(4)
+    #            print(FromSageFloat16(ReadShort(file)))
+    #            #print(ReadSignedByte(file)/255)
+    #            #print(ReadSignedByte(file)/255)
+    #            #print(ReadSignedByte(file)/255)
+    #    else:
+    #        while file.tell() < chunkEnd: # 17:16 26:21 (35:36 35:45) 62:90 71:100 89:144
+    #            file.read(1)
+				
+    #elif CompressionType == 512:
+    #    if Type == 6:
+    #        while file.tell() < chunkEnd: # (156:21 156:30) 224:45 292:64 (360:66 360:72)
+    #            file.read(1)
+    #    else:
+    #        #print("512 compressed vec")
+    #        #print(TimeCodesCount)
+    #        while file.tell() < chunkEnd: # 25:16 59:42 (93:66 93:75) 110:90 
+    #            file.read(1)
+
+    while file.tell() < chunkEnd:
             file.read(1)
-    else:
-        self.report({'ERROR'}, "!!!unsupported vector len %s" % VectorLen)
-        print("!!!unsupported vector len %s" % VectorLen)
-        while file.tell() < chunkEnd:
-            file.read(1)
-    return struct_w3d.TimeCodedAnimVector(magicNum = MagicNum, vectorLen = VectorLen, flag = Flag, 
-		timeCodesCount = TimeCodesCount, pivot = Pivot, data = Data)
+	
+    #return struct_w3d.TimeCodedAnimationVector(magicNum = CompressionType, vectorLen = VectorLen, type = Type, 
+	#	timeCodesCount = TimeCodesCount, pivot = Pivot, timeCodedKeys = TimeCodedKeys)
 
 def ReadCompressedAnimation(file, self, chunkEnd):
     print("\n### NEW COMPRESSED ANIMATION: ###")
     Header = struct_w3d.CompressedAnimationHeader()
-    AnimVectors = []
+    Channels = []
+    Vectors = []
     while file.tell() < chunkEnd:
         chunkType = ReadLong(file)
         chunkSize = GetChunkSize(ReadLong(file))
         subChunkEnd = file.tell() + chunkSize
-        print(chunkType)
         if chunkType == 641:
-            Header = ReadCompressedAnimationHeader(file, subChunkEnd)
+            Header = ReadCompressedAnimationHeader(file)
             print("#### numFrames %s" % Header.numFrames)
+            print("##Flavor %s" % Header.flavor)
+        elif chunkType == 642:
+            Channels.append(ReadTimeCodedAnimationChannel(file, self, subChunkEnd))
         elif chunkType == 643:
-            self.report({'ERROR'}, "unsupported chunktype in CompressedAnimation: %s" % chunkType)
-            print("!!!unsupported chunktype in CompressedAnimation: %s" % chunkType)
+            #print("### size: %s" % chunkSize)
+            #ReadTimeCodedBitChannel(file, self, subChunkEnd)
+            print("not implemented yet")
+            file.seek(chunkSize, 1)
         elif chunkType == 644:
-            print("####size %s" % (chunkSize - 8))
-            AnimVectors.append(ReadTimeCodedAnimVector(file, self, subChunkEnd))	
+            #print("####size %s" % (chunkSize - 8))
+            #Vectors.append(ReadTimeCodedAnimationVector(file, self, subChunkEnd))
+            print("not implemented yet")
+            file.seek(chunkSize, 1)
         else:
             self.report({'ERROR'}, "unknown chunktype in CompressedAnimation: %s" % chunkType)
             print("!!!unknown chunktype in CompressedAnimation: %s" % chunkType)
             file.seek(chunkSize, 1)	
-    return struct_w3d.CompressedAnimation(header = Header, animVectors = AnimVectors)
+    return struct_w3d.CompressedAnimation(header = Header, channels = Channels, vectors = Vectors)
 
 #######################################################################################
 # HLod
@@ -353,7 +408,7 @@ def ReadHLod(file, self, chunkEnd):
 # Box
 #######################################################################################	
 
-def ReadBox(file, chunkEnd):
+def ReadBox(file):
     #print("\n### NEW BOX: ###")
     version = GetVersion(ReadLong(file))
     attributes = ReadLong(file)
@@ -717,9 +772,7 @@ def ReadMesh(self, file, chunkEnd):
     MeshMaterialInfo = struct_w3d.MeshMaterialSetInfo()
     MeshFaces = []
     MeshMaterialPass = struct_w3d.MeshMaterialPass()
-    MeshTriangles = []
     MeshShadeIds = []
-    MeshMats = []
     MeshShaders = []
     MeshTextures = []
     MeshUsertext = ""
@@ -940,8 +993,8 @@ def LoadTexture(self, givenfilepath, mesh, texName, tex_type, destBlend):
             try:
                 img = bpy.data.images.load(ddspath)
             except:
-                self.report({'ERROR'}, "Cannot load image " + basename)
-                print("!!! Image file not found " + basename)
+                self.report({'ERROR'}, "Cannot load texture " + basename)
+                print("!!! texture file not found " + basename)
                 img = bpy.data.images.load(default_tex)
 
         cTex = bpy.data.textures.new(texName, type = 'IMAGE')
@@ -1029,7 +1082,7 @@ def loadBoneMesh(self, filepath):
 # createArmature
 #######################################################################################
 	
-def createArmature(self, Hierarchy, amtName):
+def createArmature(self, Hierarchy, amtName, subObjects):
     amt = bpy.data.armatures.new(Hierarchy.header.name)
     amt.show_names = True
     rig = bpy.data.objects.new(amtName, amt)
@@ -1042,18 +1095,24 @@ def createArmature(self, Hierarchy, amtName):
     bpy.ops.object.mode_set(mode = 'EDIT')
     bpy.context.scene.update()
 
+    non_bone_pivots = []
+    for obj in subObjects: 
+        non_bone_pivots.append(Hierarchy.pivots[obj.boneIndex])
+
 	#create the bones from the pivots
     for pivot in Hierarchy.pivots:
-        if pivot.isBone:
-            bone = amt.edit_bones.new(pivot.name)
-            if pivot.parentID > 0:
-                parent_pivot =  Hierarchy.pivots[pivot.parentID]
-                parent = amt.edit_bones[parent_pivot.name]
-                bone.parent = parent
-                size = pivot.position.x
-            bone.head = Vector((0.0, 0.0, 0.0))
-			#has to point in y direction that the rotation is applied correctly
-            bone.tail = Vector((0.0, 0.1, 0.0))
+        #test for non_bone_pivots
+        if non_bone_pivots.count(pivot) > 0:
+                continue #do not create a bone
+        bone = amt.edit_bones.new(pivot.name)
+        if pivot.parentID > 0:
+            parent_pivot =  Hierarchy.pivots[pivot.parentID]
+            parent = amt.edit_bones[parent_pivot.name]
+            bone.parent = parent
+            size = pivot.position.x
+        bone.head = Vector((0.0, 0.0, 0.0))
+	    #has to point in y direction that the rotation is applied correctly
+        bone.tail = Vector((0.0, 0.1, 0.0))
 
     #pose the bones
     bpy.ops.object.mode_set(mode = 'POSE')
@@ -1064,14 +1123,16 @@ def createArmature(self, Hierarchy, amtName):
     bone_shape = loadBoneMesh(self, bone_file)
 
     for pivot in Hierarchy.pivots:
-        if pivot.isBone:
-            bone = rig.pose.bones[pivot.name]
-            bone.location = pivot.position
-            bone.rotation_mode = 'QUATERNION'
-            bone.rotation_euler = pivot.eulerAngles
-            bone.rotation_quaternion = pivot.rotation
-            #bpy.data.objects["Bone"].scale = (4, 4, 4)
-            bone.custom_shape = bpy.data.objects["skl_bone"]
+        #test for non_bone_pivots
+        if non_bone_pivots.count(pivot) > 0:
+                continue #do not create a bone
+        bone = rig.pose.bones[pivot.name]
+        bone.location = pivot.position
+        bone.rotation_mode = 'QUATERNION'
+        bone.rotation_euler = pivot.eulerAngles
+        bone.rotation_quaternion = pivot.rotation
+        #bpy.data.objects["Bone"].scale = (4, 4, 4)
+        bone.custom_shape = bpy.data.objects["skl_bone"]
 
     bpy.ops.object.mode_set(mode = 'OBJECT')
 	
@@ -1085,19 +1146,20 @@ def createArmature(self, Hierarchy, amtName):
 # createAnimation
 #######################################################################################
 
-def createAnimation(self, Animation, Hierarchy, rig, useRig):
+def createAnimation(self, Animation, Hierarchy, rig, compressed):
     bpy.data.scenes["Scene"].render.fps = Animation.header.frameRate
     bpy.data.scenes["Scene"].frame_start = 1
     bpy.data.scenes["Scene"].frame_end = Animation.header.numFrames
-	
+
 	#create the data
     translation_data = []
     for pivot in range (0, len(Hierarchy.pivots)):
         pivot = []
         for frame in range (0, Animation.header.numFrames):
             frame = []
-            frame.append(Vector((0.0, 0.0, 0.0)))
-            frame.append(Quaternion((0.0, 0.0, 0.0, 0.0)))
+            frame.append(None)
+            frame.append(None)
+            frame.append(None)
             pivot.append(frame)
         translation_data.append(pivot)
 	
@@ -1105,51 +1167,88 @@ def createAnimation(self, Animation, Hierarchy, rig, useRig):
         if (channel.pivot == 0):
             continue   #skip roottransform
         rest_rotation = Hierarchy.pivots[channel.pivot].rotation
-        pivot = Hierarchy.pivots[channel.pivot]
-        if pivot.isBone and useRig:
+        pivot = Hierarchy.pivots[channel.pivot] 
+        try:
             obj = rig.pose.bones[pivot.name]
-        else:
+        except:
             obj = bpy.data.objects[pivot.name]
 			
         # ANIM_CHANNEL_X
         if channel.type == 0:   
-            for frame in range(channel.firstFrame, channel.lastFrame):
-                vec = Vector((channel.data[frame - channel.firstFrame], 0.0, 0.0))
-                translation_data[channel.pivot][frame][0] += vec
+            if compressed:
+                for key in channel.timeCodedKeys:
+                    translation_data[channel.pivot][key.frame][0] = key.value
+            else:
+                for frame in range(channel.firstFrame, channel.lastFrame):
+                    translation_data[channel.pivot][frame][0] = channel.data[frame - channel.firstFrame]
         # ANIM_CHANNEL_Y
         elif channel.type == 1:   
-            for frame in range(channel.firstFrame, channel.lastFrame):
-                vec = Vector((0.0, channel.data[frame - channel.firstFrame], 0.0))
-                translation_data[channel.pivot][frame][0] += vec
+            if compressed:
+                for key in channel.timeCodedKeys:
+                    translation_data[channel.pivot][key.frame][1] = key.value
+            else:
+                for frame in range(channel.firstFrame, channel.lastFrame):
+                    translation_data[channel.pivot][frame][1] = channel.data[frame - channel.firstFrame]
         # ANIM_CHANNEL_Z
         elif channel.type == 2:  
-            for frame in range(channel.firstFrame, channel.lastFrame):
-                vec = Vector((0.0, 0.0, channel.data[frame - channel.firstFrame]))
-                translation_data[channel.pivot][frame][0] += vec
+            if compressed:
+                for key in channel.timeCodedKeys:
+                    translation_data[channel.pivot][key.frame][2] = key.value
+            else:
+                for frame in range(channel.firstFrame, channel.lastFrame):
+                    translation_data[channel.pivot][frame][2] = channel.data[frame - channel.firstFrame]
 		
 	    # ANIM_CHANNEL_Q
         elif channel.type == 6:  
-            for frame in range(channel.firstFrame, channel.lastFrame):
-                obj.rotation_mode = 'QUATERNION'
-                obj.rotation_quaternion = rest_rotation * channel.data[frame - channel.firstFrame]
-                obj.keyframe_insert(data_path='rotation_quaternion', frame = frame)  
+            obj.rotation_mode = 'QUATERNION'
+            if compressed:
+                for key in channel.timeCodedKeys:
+                    obj.rotation_quaternion = rest_rotation * key.value
+                    obj.keyframe_insert(data_path='rotation_quaternion', frame = key.frame) 
+            else:
+                for frame in range(channel.firstFrame, channel.lastFrame):
+                    obj.rotation_quaternion = rest_rotation * channel.data[frame - channel.firstFrame]
+                    obj.keyframe_insert(data_path='rotation_quaternion', frame = frame)  
         else:
             self.report({'ERROR'}, "unsupported channel type: %s" %channel.type)
             print("unsupported channel type: %s" %channel.type)
 
-    for pivot in range (1, len(Hierarchy.pivots)):
+    for pivot in range(1, len(Hierarchy.pivots)):
         rest_location = Hierarchy.pivots[pivot].position
-        rest_rotation = Hierarchy.pivots[channel.pivot].rotation
-        if Hierarchy.pivots[pivot].isBone and useRig:
+        rest_rotation = Hierarchy.pivots[pivot].rotation 
+        lastFrameLocation = Vector((0.0, 0.0, 0.0))
+        try:
             obj = rig.pose.bones[Hierarchy.pivots[pivot].name]
-        else:
+        except:
             obj = bpy.data.objects[Hierarchy.pivots[pivot].name]
 			
         for frame in range (0, Animation.header.numFrames):
-            if not translation_data[pivot][frame][0] == Vector((0.0, 0.0, 0.0)):
-                bpy.context.scene.frame_set(frame)	
-                obj.location = rest_location + (obj.rotation_quaternion * translation_data[pivot][frame][0])
+            bpy.context.scene.frame_set(frame)	
+            pos = Vector((0.0, 0.0, 0.0))
+
+            if not translation_data[pivot][frame][0] == None:
+                pos[0] = translation_data[pivot][frame][0]
+                if not translation_data[pivot][frame][1] == None:
+                    pos[1] = translation_data[pivot][frame][1]
+                if not translation_data[pivot][frame][2] == None:	
+                    pos[2] = translation_data[pivot][frame][2]
+                obj.location = rest_location + (rest_rotation * pos)
                 obj.keyframe_insert(data_path='location', frame = frame) 
+                lastFrameLocation = pos
+					
+            elif not translation_data[pivot][frame][1] == None:
+                pos[1] = translation_data[pivot][frame][1]
+                if not translation_data[pivot][frame][2] == None:
+                    pos[2] = translation_data[pivot][frame][2]
+                obj.location = rest_location + (rest_rotation * pos)
+                obj.keyframe_insert(data_path='location', frame = frame) 
+                lastFrameLocation = pos
+				
+            elif not translation_data[pivot][frame][2] == None:
+                pos[2] = translation_data[pivot][frame][2]
+                obj.location = rest_location + (rest_rotation * pos)
+                obj.keyframe_insert(data_path='location', frame = frame)		
+                lastFrameLocation = pos
 
 #######################################################################################
 # create Box
@@ -1191,12 +1290,14 @@ def MainImport(givenfilepath, context, self):
     Textures = []
     Hierarchy = struct_w3d.Hierarchy()
     Animation = struct_w3d.Animation()
+    CompressedAnimation = struct_w3d.CompressedAnimation()
     HLod = struct_w3d.HLod()
     amtName = ""
 
     while file.tell() < filesize:
         Chunktype = ReadLong(file)
         Chunksize =  GetChunkSize(ReadLong(file))
+        #print(Chunksize)
         chunkEnd = file.tell() + Chunksize
         if Chunktype == 0:
             m = ReadMesh(self, file, chunkEnd)
@@ -1212,7 +1313,7 @@ def MainImport(givenfilepath, context, self):
             file.seek(chunkEnd,0)
 
         elif Chunktype == 640:
-            ReadCompressedAnimation(file, self, chunkEnd)
+            CompressedAnimation = ReadCompressedAnimation(file, self, chunkEnd)
             file.seek(chunkEnd,0)
 
         elif Chunktype == 1792:
@@ -1220,7 +1321,7 @@ def MainImport(givenfilepath, context, self):
             file.seek(chunkEnd,0)
 
         elif Chunktype == 1856:
-            Box = ReadBox(file, chunkEnd)
+            Box = ReadBox(file)
             file.seek(chunkEnd,0)
 
         else:
@@ -1250,14 +1351,17 @@ def MainImport(givenfilepath, context, self):
         except:
             self.report({'ERROR'}, "skeleton file not found: " + Animation.header.hieraName) 
             print("!!! skeleton file not found: " + Animation.header.hieraName)
-
-    #test for non_bone_pivots
-    for obj in HLod.lodArray.subObjects: 
-        if Hierarchy.header.pivotCount > 0:
-            Hierarchy.pivots[obj.boneIndex].isBone = 0
+			
+    elif (not CompressedAnimation.header.name == "") and (Hierarchy.header.name == ""):
+        sklpath = os.path.dirname(givenfilepath) + "\\" + CompressedAnimation.header.hieraName.lower() + ".w3d"
+        try:
+            Hierarchy = LoadSKL(self, sklpath)
+        except:
+            self.report({'ERROR'}, "skeleton file not found: " + CompressedAnimation.header.hieraName) 
+            print("!!! skeleton file not found: " + CompressedAnimation.header.hieraName)
 
     #create skeleton if needed
-    if Hierarchy.header.name.endswith('_SKL'):
+    if not HLod.header.modelName == HLod.header.HTreeName:
         amtName = Hierarchy.header.name
         found = False
         for obj in bpy.data.objects:
@@ -1265,16 +1369,10 @@ def MainImport(givenfilepath, context, self):
                 rig = obj
                 found = True
         if not found:
-            rig = createArmature(self, Hierarchy, amtName)
-            rig.sklFile = sklpath
-			#rig['sklFile'] = sklpath
+            rig = createArmature(self, Hierarchy, amtName, HLod.lodArray.subObjects)
         if len(Meshes) > 0:
             #if a mesh is loaded set the armature invisible
             rig.hide = True
-			
-    # needed because sometimes the parent obj of an object is not yet loaded
-    waitObj = None
-    waitObj_parent = ""
 
     for m in Meshes:	
         Vertices = m.verts
@@ -1307,12 +1405,6 @@ def MainImport(givenfilepath, context, self):
 
         mesh_ob = bpy.data.objects.new(m.header.meshName, mesh)
         mesh_ob['userText'] = m.userText
-		
-		#set the parent of the waiting object
-        if m.header.containerName == waitObj_parent:
-            if not waitObj == None:
-                waitObj.parent = mesh_ob
-                mesh_ob.parent_type = 'MESH'
 
 		#show the bounding boxes
         #mesh_ob.show_bounds = True
@@ -1365,7 +1457,10 @@ def MainImport(givenfilepath, context, self):
                     lamp_object.location = (5.0, 5.0, 5.0)
             if not m.bumpMaps.normalMap.entryStruct.diffuseTexName == "":
                 LoadTexture(self, givenfilepath, mesh, m.bumpMaps.normalMap.entryStruct.diffuseTexName, "diffuse", destBlend)
-
+				
+				
+    for m in Meshes: #need an extra loop because the order of the meshes is random
+        mesh_ob = bpy.data.objects[m.header.meshName]
         #hierarchy stuff
         if Hierarchy.header.pivotCount > 0:
             # mesh header attributes
@@ -1378,13 +1473,14 @@ def MainImport(givenfilepath, context, self):
 			#        143360 -> skin - two sided - hidden
 			#        163840 -> skin - cast shadow
             #        172032 -> skin - two sided - cast shadow
+            #        393216 -> normal mesh - camera oriented (points _towards_ camera)
             type = m.header.attrs
             if type == 8192 or type == 40960 or type == 139264 or type == 143360 or type == 172032:
                 mesh.show_double_sided = True
 				
-            if type == 0 or type == 8192 or type == 32768 or type == 40960:
+            if type == 0 or type == 8192 or type == 32768 or type == 40960 or type == 393216:
                 for pivot in Hierarchy.pivots:
-                    if m.header.meshName == pivot.name:
+                    if pivot.name == m.header.meshName:
                         mesh_ob.rotation_mode = 'QUATERNION'
                         mesh_ob.location =  pivot.position
                         mesh_ob.rotation_euler = pivot.eulerAngles
@@ -1393,17 +1489,12 @@ def MainImport(givenfilepath, context, self):
                         #test if the pivot has a parent pivot and parent the corresponding bone to the mesh if it has
                         if pivot.parentID > 0:
                             parent_pivot = Hierarchy.pivots[pivot.parentID]
-                            if parent_pivot.isBone:
+                            try:
+                                mesh_ob.parent = bpy.data.objects[parent_pivot.name]
+                            except:
                                 mesh_ob.parent = bpy.data.objects[amtName]
                                 mesh_ob.parent_bone = parent_pivot.name
                                 mesh_ob.parent_type = 'BONE'
-                            else:
-                                try:
-                                    mesh_ob.parent = bpy.data.objects[parent_pivot.name]
-                                    mesh_ob.parent_type = 'MESH'
-                                except:
-                                    waitObj = mesh_ob
-                                    waitObj_parent = parent_pivot.name
 
             elif type == 131072 or type == 139264 or type == 143360 or type == 163840 or type == 172032:
                 for pivot in Hierarchy.pivots:
@@ -1414,6 +1505,7 @@ def MainImport(givenfilepath, context, self):
                     if weight == 0.0:
                         weight = 1.0
                     mesh_ob.vertex_groups[m.vertInfs[i].boneIdx].add([i], weight, 'REPLACE')
+					
 					#two bones are not working yet
                     #mesh_ob.vertex_groups[m.vertInfs[i].xtraIdx].add([i], m.vertInfs[i].xtraInf, 'REPLACE')
 
@@ -1422,7 +1514,7 @@ def MainImport(givenfilepath, context, self):
                 mod.use_bone_envelopes = False
                 mod.use_vertex_groups = True
 				
-				#to keep the transformations while mesh is in edit mode
+				#to keep the transformations while mesh is in edit mode!!!
                 mod.show_in_editmode = True
                 mod.show_on_cage = True
             else:
@@ -1433,10 +1525,18 @@ def MainImport(givenfilepath, context, self):
     #animation stuff
     if not Animation.header.name == "":	
         try:
-            createAnimation(self, Animation, Hierarchy, rig, True)
+            createAnimation(self, Animation, Hierarchy, rig, False)
         except:
             #the animation could be completely without a rig and bones
             createAnimation(self, Animation, Hierarchy, None, False)
+			
+    elif not CompressedAnimation.header.name == "":	
+        createAnimation(self, CompressedAnimation, Hierarchy, rig, True)
+        #try:
+        #    createAnimation(self, CompressedAnimation, Hierarchy, rig, True)
+        #except:
+        #    #the animation could be completely without a rig and bones
+        #    createAnimation(self, CompressedAnimation, Hierarchy, None, True)
 	
     #to render the loaded textures				
     bpy.context.scene.game_settings.material_mode = 'GLSL'

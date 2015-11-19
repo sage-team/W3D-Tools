@@ -44,8 +44,6 @@ class HierarchyPivot(Struct):
     position = Vector((0.0, 0.0 ,0.0))
     eulerAngles = Vector((0.0, 0.0 ,0.0))
     rotation = Quaternion((1.0, 0.0, 0.0, 0.0))
-	
-    isBone = 1 #additional boolean, not part of the data (needed for the import skript)
 
 class Hierarchy(Struct):
     header = HierarchyHeader()
@@ -84,17 +82,29 @@ class CompressedAnimationHeader(Struct):
     frameRate = 0
     flavor = 0
 	
-class TimeCodedAnimVector(Struct):
-    magicNum = 0
-    vectorLen = 0
-    flag = 0
-    timeCodesCount = 0 #what is this for?
+class TimeCodedAnimationKey(Struct):
+    frame = 0
+    value = 0
+	
+class TimeCodedAnimationChannel(Struct):
+    timeCodesCount = 0
     pivot = 0
-    data = []
+    vectorLen = 0
+    type = 0
+    timeCodedKeys = []
+	
+class TimeCodedAnimationVector(Struct):
+    magicNum = 0 #what is this for?
+    vectorLen = 0
+    type = 0
+    timeCodesCount = 0 
+    pivot = 0
+    timeCodedKeys = []
     
 class CompressedAnimation(Struct): 
     header = CompressedAnimationHeader()
-    animVectors = []
+    channels = []
+    vectors = []
     
 #######################################################################################
 # HLod

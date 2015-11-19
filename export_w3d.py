@@ -1,5 +1,5 @@
 #Written by Stephan Vedder and Michael Schnabel
-#Last Modification 10.07.2015
+#Last Modification 17.11.2015
 #Exports the W3D Format used in games by Westwood & EA
 import bpy
 import operator
@@ -14,10 +14,6 @@ from . import struct_w3d, import_w3d
 
 #TODO 
 
-# support for export with existing skeleton file! (test if all the pivots exist and are equal)
-
-# support for export as simple mesh (without HLOD and Hierarchy)
-
 # write AABTree to file
 
 # change test if we need to write normal map chunk
@@ -26,12 +22,14 @@ from . import struct_w3d, import_w3d
 
 # export animation data (when import works)
 
-
 HEAD = 8 #4(long = chunktype) + 4 (long = chunksize)
 
 #######################################################################################
 # Basic Methods
 #######################################################################################
+
+def getStringSize(string):
+    return len(string) + 1 #binary 0
 
 def WriteString(file, string):
     file.write(bytes(string, 'UTF-8'))
@@ -121,18 +119,27 @@ def triangulate(mesh):
 # Hierarchy
 #######################################################################################
 
-def WriteHierarchyHeader(file, size, header):
+def getHierarchyHeaderChunkSize(header):
+    return 36
+
+def WriteHierarchyHeader(file, header):
     WriteLong(file, 257) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getHierarchyHeaderChunkSize(header)) #chunksize
 	
     WriteLong(file, MakeVersion(header.version))
     WriteFixedString(file, header.name)
     WriteLong(file, header.pivotCount)
-    WriteVector(file, header.centerPos)
+    WriteVector(file, header.centerPos)	
 
-def WritePivots(file, size, pivots):
+def getHierarchyPivotsChunkSize(pivots):
+    size = 0
+    for pivot in pivots:
+        size += 60
+    return size
+	
+def WritePivots(file, pivots):
     WriteLong(file, 258) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getHierarchyPivotsChunkSize(pivots)) #chunksize
 	
     for pivot in pivots:
         WriteFixedString(file, pivot.name)
@@ -140,54 +147,63 @@ def WritePivots(file, size, pivots):
         WriteVector(file, pivot.position)
         WriteVector(file, pivot.eulerAngles)
         WriteQuaternion(file, pivot.rotation)
+		
+def getPivotFixupsChunkSize(pivot_fixups):
+    size = 0
+    for fixup in pivot_fixups:
+        size += 12
+    return size
 
-def WritePivotFixups(file, size, pivot_fixups):
+def WritePivotFixups(file, pivot_fixups):
     WriteLong(file, 259) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getPivotFixupsChunkSize(pivot_fixups)) #chunksize
 	
     for fixup in pivot_fixups: 
         WriteVector(file, fixup)
+		
+def getHierarchyChunkSize(hierarchy):
+    size = HEAD + getHierarchyHeaderChunkSize(hierarchy.header)
+    size += HEAD + getHierarchyPivotsChunkSize(hierarchy.pivots)
+    if len(hierarchy.pivot_fixups) > 0:
+        size += HEAD + getPivotFixupsChunkSize(hierarchy.pivot_fixups)
+    return size
 
 def WriteHierarchy(file, hierarchy):
     #print("\n### NEW HIERARCHY: ###")
     WriteLong(file, 256) #chunktype
-    
-    headerSize = 36
-    pivotsSize = len(hierarchy.pivots) * 60
-    pivotFixupsSize = len(hierarchy.pivot_fixups) * 12
-    size = HEAD + headerSize + HEAD + pivotsSize 
-    if pivotFixupsSize > 0:
-        size += HEAD + pivotFixupsSize 
-
-    WriteLong(file, MakeChunkSize(size)) #chunksize
+    WriteLong(file, MakeChunkSize(getHierarchyChunkSize(hierarchy))) #chunksize
 	
-    WriteHierarchyHeader(file, headerSize, hierarchy.header)
+    WriteHierarchyHeader(file, hierarchy.header)
     #print("Header")
-    WritePivots(file, pivotsSize, hierarchy.pivots)
+    WritePivots(file, hierarchy.pivots)
     #print("Pivots")
-	# still dont know what pivotFixups are for and what they are
-    if pivotFixupsSize > 0:
-        WritePivotFixups(file, pivotFixupsSize, hierarchy.pivot_fixups)
+    if len(hierarchy.pivot_fixups) > 0:
+        WritePivotFixups(file, hierarchy.pivot_fixups)
         print("Pivot Fixups")
 	
 #######################################################################################
 # Animation
 #######################################################################################
+
+def getAnimationHeaderChunkSize(header):
+    return 44
 	
-def WriteAnimationHeader(file, size, header):
+def WriteAnimationHeader(file, header):
     WriteLong(file, 513) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getAnimationHeaderChunkSize(header)) #chunksize
 
     WriteLong(file, MakeVersion(header.version))
     WriteFixedString(file, header.name)
     WriteFixedString(file, header.hieraName)
     WriteLong(file, header.numFrames)
     WriteLong(file, header.frameRate)
+	
+def getAnimationChannelChunkSize(channel):
+    return 12 + (len(channel.data) * channel.vectorLen) * 4
 
 def WriteAnimationChannel(file, channel):
     WriteLong(file, 514) #chunktype
-    size = 12 + (len(channel.data) * channel.vectorLen) * 4
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getAnimationChannelChunkSize(channel)) #chunksize
 	
     WriteShort(file, channel.firstFrame)
     WriteShort(file, channel.lastFrame)
@@ -195,6 +211,8 @@ def WriteAnimationChannel(file, channel):
     WriteShort(file, channel.type)
     WriteShort(file, channel.pivot)
     WriteShort(file, channel.pad)
+	
+    print(len(channel.data))
 
     if channel.vectorLen == 1:
         for f in channel.data:
@@ -202,55 +220,55 @@ def WriteAnimationChannel(file, channel):
     elif channel.vectorLen == 4:
         for quat in channel.data:
             WriteQuaternion(file, quat)
+			
+def getAnimationChunkSize(animation):
+    size = HEAD + getAnimationHeaderChunkSize(animation.header)
+    for channel in animation.channels:
+        size += HEAD + getAnimationChannelChunkSize(channel)
+    return size
 
 def WriteAnimation(file, animation):
-    #print("\n### NEW ANIMATION: ###")
+    print("\n### NEW ANIMATION: ###")
     WriteLong(file, 512) #chunktype
+    WriteLong(file, MakeChunkSize(getAnimationChunkSize(animation))) #chunksize
 	
-    headerSize = 44
-    channelsSize = len(animation.channels) * (12 + HEAD)
-    for channel in animation.channels:
-        channelsSize += (len(channel.data) * channel.vectorLen) * 4
-    size = HEAD + headerSize + channelsSize		
-	
-    WriteLong(file, MakeChunkSize(size)) #chunksize
-	
-    WriteAnimationHeader(file, headerSize, animation.header)
-    #print("Header")
+    WriteAnimationHeader(file, animation.header)
+    print("Header")
     for channel in animation.channels:
         WriteAnimationChannel(file, channel)
         print("Channel")
 			
-def WriteCompressedAnimationHeader(file, size, header):
-    WriteLong(file, 641) #chunktype
-    WriteLong(file, size) #chunksize
-
-    WriteLong(file, MakeVersion(header.version))
-    WriteFixedString(file, header.name)
-    WriteFixedString(file, header.hieraName)
-    WriteLong(file, header.numFrames)
-    WriteShort(file, header.frameRate)
-    WriteShort(file, header.flavor)
+			
+#def WriteCompressedAnimationHeader(file, size, header):
+#    WriteLong(file, 641) #chunktype
+#    WriteLong(file, size) #chunksize
+#
+#    WriteLong(file, MakeVersion(header.version))
+#    WriteFixedString(file, header.name)
+#    WriteFixedString(file, header.hieraName)
+#    WriteLong(file, header.numFrames)
+#    WriteShort(file, header.frameRate)
+#    WriteShort(file, header.flavor)
 	
-def WriteTimeCodedAnimVector(file, size, animVector):
-    WriteLong(file, 644) #chunktype
-    WriteLong(file, size) #chunksize
+#def WriteTimeCodedAnimVector(file, size, animVector):
+#    WriteLong(file, 644) #chunktype
+#    WriteLong(file, size) #chunksize
 	
-    print("#####not implemented yet!!")
+#    print("#####not implemented yet!!")
    	
-def WriteCompressedAnimation(file, compAnimation):
-    #print("\n### NEW COMPRESSED ANIMATION: ###")
-    WriteLong(file, 640) #chunktype
+#def WriteCompressedAnimation(file, compAnimation):
+#    #print("\n### NEW COMPRESSED ANIMATION: ###")
+#    WriteLong(file, 640) #chunktype
+#	
+#    headerSize = 44
+#    vectorsSize = 0
+#    #for vec in compAnimation.animVectors:
+#        #vectorsSize += HEAD + 
+#    size = HEAD + headerSize #+ vectorsSize
 	
-    headerSize = 44
-    vectorsSize = 0
-    #for vec in compAnimation.animVectors:
-        #vectorsSize += HEAD + 
-    size = HEAD + headerSize #+ vectorsSize
-	
-    WriteLong(file, size) #chunksize
+#    WriteLong(file, size) #chunksize
 
-    WriteCompressedAnimationHeader(file, headerSize, compAnimation.header)	
+#    WriteCompressedAnimationHeader(file, headerSize, compAnimation.header)	
     #print("Header")
     #for vec in compAnimation.animVectors:
         #WriteTimeCodedAnimVector(file, vec)
@@ -260,52 +278,65 @@ def WriteCompressedAnimation(file, compAnimation):
 # HLod
 #######################################################################################
 
-def WriteHLodHeader(file, size, header):
+def getHLodHeaderChunkSize(header):
+    return 40
+
+def WriteHLodHeader(file, header):
     WriteLong(file, 1793) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getHLodHeaderChunkSize(header)) #chunksize
 	
     WriteLong(file, MakeVersion(header.version))
     WriteLong(file, header.lodCount)
     WriteFixedString(file, header.modelName)
     WriteFixedString(file, header.HTreeName) 
+	
+def getHLodArrayHeaderChunkSize(arrayHeader):
+    return 8
 
-def WriteHLodArrayHeader(file, size, arrayHeader):
+def WriteHLodArrayHeader(file, arrayHeader):
     WriteLong(file, 1795) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getHLodArrayHeaderChunkSize(arrayHeader)) #chunksize
 	
     WriteLong(file, arrayHeader.modelCount)
     WriteFloat(file, arrayHeader.maxScreenSize)
+	
+def getHLodSubObjectChunkSize(subObject):
+    return 36
 
-def WriteHLodSubObject(file, size, subObject): 
+def WriteHLodSubObject(file, subObject): 
     WriteLong(file, 1796) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getHLodSubObjectChunkSize(subObject)) #chunksize
 	
     WriteLong(file, subObject.boneIndex)
     WriteLongFixedString(file, subObject.name)
 
-def WriteHLodArray(file, size, lodArray, headerSize, subObjectSize):
-    WriteLong(file, 1794) #chunktype
-    WriteLong(file, MakeChunkSize(size)) #chunksize
+def getHLodArrayChunkSize(lodArray):
+    size = HEAD + getHLodArrayHeaderChunkSize(lodArray.header)
+    for object in lodArray.subObjects: 
+        size += HEAD + getHLodSubObjectChunkSize(object)
+    return size		
 	
-    WriteHLodArrayHeader(file, headerSize, lodArray.header)
+def WriteHLodArray(file, lodArray):
+    WriteLong(file, 1794) #chunktype
+    WriteLong(file, MakeChunkSize(getHLodArrayChunkSize(lodArray))) #chunksize
+	
+    WriteHLodArrayHeader(file, lodArray.header)
     for object in lodArray.subObjects:
-        WriteHLodSubObject(file, subObjectSize, object)
+        WriteHLodSubObject(file, object)
 
+def getHLodChunkSize(hlod):
+    size = HEAD + getHLodHeaderChunkSize(hlod.header)
+    size += HEAD + getHLodArrayChunkSize(hlod.lodArray)
+    return size		
+		
 def WriteHLod(file, hlod):
     #print("\n### NEW HLOD: ###")
     WriteLong(file, 1792) #chunktype
+    WriteLong(file, MakeChunkSize(getHLodChunkSize(hlod))) #chunksize
 	
-    headerSize = 40
-    arrayHeaderSize = 8
-    subObjectSize = 36 
-    arraySize = HEAD + arrayHeaderSize + (HEAD + subObjectSize) * len(hlod.lodArray.subObjects)
-    size = HEAD + headerSize + HEAD + arraySize
-	
-    WriteLong(file, MakeChunkSize(size)) #chunksize
-	
-    WriteHLodHeader(file, headerSize, hlod.header)
+    WriteHLodHeader(file, hlod.header)
     #print("Header")
-    WriteHLodArray(file, arraySize, hlod.lodArray, arrayHeaderSize, subObjectSize)
+    WriteHLodArray(file, hlod.lodArray)
     #print("Array")
 	
 #######################################################################################
@@ -326,14 +357,17 @@ def WriteBox(file, box):
 #######################################################################################
 # Texture
 #######################################################################################	
+
+def getTextureChunkSize(texture):
+    return HEAD + getStringSize(texture.name) # + HEAD + 12
 	
 def WriteTexture(file, texture):
     #print(texture.name)
     WriteLong(file, 49) #chunktype
-    WriteLong(file,  MakeChunkSize(HEAD + len(texture.name) + 1))# + HEAD + 12)) #chunksize
+    WriteLong(file,  MakeChunkSize(getTextureChunkSize(texture)))#chunksize
 	
     WriteLong(file, 50) #chunktype
-    WriteLong(file, len(texture.name) + 1) #chunksize
+    WriteLong(file, getStringSize(texture.name)) #chunksize
     
     WriteString(file, texture.name)
 	
@@ -344,10 +378,16 @@ def WriteTexture(file, texture):
     #WriteShort(file, texture.textureInfo.animType)
     #WriteLong(file, texture.textureInfo.frameCount)
     #WriteFloat(file, texture.textureInfo.frameRate)
+	
+def getTextureArrayChunkSize(textures):
+    size = 0
+    for tex in textures:
+        size += HEAD + getTextureChunkSize(tex)
+    return size
 
-def WriteTextureArray(file, size, textures):
+def WriteTextureArray(file, textures):
     WriteLong(file, 48) #chunktype
-    WriteLong(file, MakeChunkSize(size)) #chunksize  
+    WriteLong(file, MakeChunkSize(getTextureArrayChunkSize(textures))) #chunksize  
 	
     for texture in textures:
         WriteTexture(file, texture)
@@ -356,26 +396,42 @@ def WriteTextureArray(file, size, textures):
 # Material
 #######################################################################################	
 
+def getMeshTextureCoordArrayChunkSize(txCoords):
+    return len(txCoords) * 8
+
 def WriteMeshTextureCoordArray(file, txCoords):
     WriteLong(file, 74) #chunktype
-    WriteLong(file, len(txCoords) * 8) #chunksize 
+    WriteLong(file, getMeshTextureCoordArrayChunkSize(txCoords)) #chunksize 
     for coord in txCoords:
         WriteFloat(file, coord[0])
         WriteFloat(file, coord[1])
+		
+def getMeshTextureStageChunkSize(textureStage):
+    size = HEAD + len(textureStage.txIds) * 4
+    size += HEAD + getMeshTextureCoordArrayChunkSize(textureStage.txCoords)
+    return size
 
-def WriteMeshTextureStage(file, size, textureStage):
+def WriteMeshTextureStage(file, textureStage):
     WriteLong(file, 72) #chunktype
-    WriteLong(file, MakeChunkSize(size)) #chunksize  
+    WriteLong(file, MakeChunkSize(getMeshTextureStageChunkSize(textureStage))) #chunksize  
 	
     WriteLong(file, 73) #chunktype
     WriteLong(file, len(textureStage.txIds) * 4) #chunksize 
     WriteLongArray(file, textureStage.txIds)
 	
     WriteMeshTextureCoordArray(file, textureStage.txCoords)
+	
+def getMeshMaterialPassChunkSize(matlPass):
+    size = HEAD + len(matlPass.vmIds) * 4
+    size += HEAD + len(matlPass.shaderIds) * 4
+    if len(matlPass.txStage.txIds) > 0:
+        size += HEAD + getMeshTextureStageChunkSize(matlPass.txStage)
+    return size
 
-def WriteMeshMaterialPass(file, size, matlPass):
+
+def WriteMeshMaterialPass(file, matlPass):
     WriteLong(file, 56) #chunktype
-    WriteLong(file, MakeChunkSize(size)) #chunksize  
+    WriteLong(file, MakeChunkSize(getMeshMaterialPassChunkSize(matlPass))) #chunksize  
 	
     WriteLong(file, 57) #chunktype
     WriteLong(file, len(matlPass.vmIds) * 4) #chunksize  
@@ -387,19 +443,31 @@ def WriteMeshMaterialPass(file, size, matlPass):
 	
     WriteLongArray(file, matlPass.shaderIds)
 	
-    if len(matlPass.dcg) > 0:
-        WriteLong(file, 59) #chunktype
-        WriteLong(file, len(matlPass.dcg) * 4) #chunksize 
+    #if len(matlPass.dcg) > 0:
+    #    WriteLong(file, 59) #chunktype
+    #    WriteLong(file, len(matlPass.dcg) * 4) #chunksize 
  
-        for dcg in matlPass.dcg: 
-            WriteRGBA(file, dcg)
+    #    for dcg in matlPass.dcg: 
+    #        WriteRGBA(file, dcg)
 	
     if len(matlPass.txStage.txIds) > 0:
-        WriteMeshTextureStage(file, HEAD + len(matlPass.txStage.txIds) * 4 + HEAD + len(matlPass.txStage.txCoords) * 8, matlPass.txStage)
+        WriteMeshTextureStage(file, matlPass.txStage)
+		
+def getMaterialChunkSize(mat):
+    size = HEAD + getStringSize(mat.vmName)
+    size += HEAD + 32
+    if len(mat.vmArgs0) > 0:
+        size += HEAD + getStringSize(mat.vmArgs0)
+    if len(mat.vmArgs1) > 0:
+        size += HEAD + getStringSize(mat.vmArgs1)
+    return size
 
 def WriteMaterial(file, mat):
+    WriteLong(file, 43) #chunktype
+    WriteLong(file, MakeChunkSize(getMaterialChunkSize(mat))) #chunksize
+	
     WriteLong(file, 44) #chunktype
-    WriteLong(file, len(mat.vmName)+1) #chunksize  #has to be size of the string plus binary 0
+    WriteLong(file, getStringSize(mat.vmName)) #chunksize  #has to be size of the string plus binary 0
 	
     WriteString(file, mat.vmName)
 	
@@ -417,27 +485,33 @@ def WriteMaterial(file, mat):
 	
     if len(mat.vmArgs0) > 0:
         WriteLong(file, 46) #chunktype
-        WriteLong(file, len(mat.vmArgs0) + 1) #chunksize 
+        WriteLong(file, getStringSize(mat.vmArgs0)) #chunksize 
         WriteString(file, mat.vmArgs0)
     
     if len(mat.vmArgs1) > 0:
         WriteLong(file, 47) #chunktype
-        WriteLong(file, len(mat.vmArgs1) + 1) #chunksize 
+        WriteLong(file, getStringSize(mat.vmArgs1)) #chunksize 
         WriteString(file, mat.vmArgs1)
+		
+def getMeshMaterialArrayChunkSize(materials): 
+    size = 0
+    for material in materials:
+        size += HEAD + getMaterialChunkSize(material)
+    return size
 
-def WriteMeshMaterialArray(file, size, materials):
+def WriteMeshMaterialArray(file, materials):
     WriteLong(file, 42) #chunktype
-    WriteLong(file, MakeChunkSize(size)) #chunksize
-	
-    WriteLong(file, 43) #chunktype
-    WriteLong(file, MakeChunkSize(size - HEAD)) #chunksize
+    WriteLong(file, MakeChunkSize(getMeshMaterialArrayChunkSize(materials))) #chunksize
 
     for mat in materials:
         WriteMaterial(file, mat)
 		
-def WriteMeshMaterialSetInfo (file, size, matSetInfo):
+def getMeshMaterialSetInfoChunkSize(matSetInfo):
+    return 16
+		
+def WriteMeshMaterialSetInfo (file, matSetInfo):
     WriteLong(file, 40) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getMeshMaterialSetInfoChunkSize(matSetInfo)) #chunksize
 	
     WriteLong(file, matSetInfo.passCount)
     WriteLong(file, matSetInfo.vertMatlCount)
@@ -448,23 +522,29 @@ def WriteMeshMaterialSetInfo (file, size, matSetInfo):
 # Vertices
 #######################################################################################
 
-def WriteMeshVerticesArray(file, size, vertices):
+def getMeshVerticesArrayChunkSize(vertices):
+    return len(vertices) * 12
+
+def WriteMeshVerticesArray(file, vertices):
     WriteLong(file, 2) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getMeshVerticesArrayChunkSize(vertices)) #chunksize
 	
     for vert in vertices:
         WriteVector(file, vert)
 		
-def WriteMeshVerticesCopyArray(file, size, vertices):
+def WriteMeshVerticesCopyArray(file, vertices):
     WriteLong(file, 3072) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getMeshVerticesArrayChunkSize(vertices)) #chunksize
 	
     for vert in vertices:
         WriteVector(file, vert)
 
-def WriteMeshVertexInfluences(file, size, influences):
+def getMeshVertexInfluencesChunkSize(influences):
+    return len(influences) * 8		
+		
+def WriteMeshVertexInfluences(file, influences):
     WriteLong(file, 14) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getMeshVertexInfluencesChunkSize(influences)) #chunksize
 
     for inf in influences:
         WriteShort(file, inf.boneIdx)
@@ -476,16 +556,16 @@ def WriteMeshVertexInfluences(file, size, influences):
 # Normals
 #######################################################################################
 	
-def WriteMeshNormalArray(file, size, normals):
+def WriteMeshNormalArray(file, normals):
     WriteLong(file, 3) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getMeshVerticesArrayChunkSize(normals)) #chunksize
 	
     for norm in normals:
         WriteVector(file, norm)
 		
-def WriteMeshNormalCopyArray(file, size, normals):
+def WriteMeshNormalCopyArray(file, normals):
     WriteLong(file, 3073) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getMeshVerticesArrayChunkSize(normals)) #chunksize
 	
     for norm in normals:
         WriteVector(file, norm)
@@ -494,9 +574,12 @@ def WriteMeshNormalCopyArray(file, size, normals):
 # Faces
 #######################################################################################	
 
-def WriteMeshFaceArray(file, size, faces):
+def getMeshFaceArrayChunkSize(faces):
+    return len(faces) * 32
+
+def WriteMeshFaceArray(file, faces):
     WriteLong(file, 32) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getMeshFaceArrayChunkSize(faces)) #chunksize
 	
     for face in faces:
         WriteLong(file, face.vertIds[0])
@@ -509,10 +592,13 @@ def WriteMeshFaceArray(file, size, faces):
 #######################################################################################
 # Shader
 #######################################################################################
+
+def getMeshShaderArrayChunkSize(shaders):
+    return len(shaders) * 16
 	
-def WriteMeshShaderArray(file, size, shaders):
+def WriteMeshShaderArray(file, shaders):
     WriteLong(file, 41) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getMeshShaderArrayChunkSize(shaders)) #chunksize
     for shader in shaders:
         WriteUnsignedByte(file, shader.depthCompare)
         WriteUnsignedByte(file, shader.depthMask)
@@ -534,43 +620,49 @@ def WriteMeshShaderArray(file, size, shaders):
 #######################################################################################
 # Bump Maps
 #######################################################################################
+
+def getNormalMapHeaderChunkSize(header):
+    return 37
 	
 def WriteNormalMapHeader(file, header): 
     WriteLong(file, 82) #chunktype
-    WriteLong(file, 37) #chunksize
+    WriteLong(file, getNormalMapHeaderChunkSize(header)) #chunksize
 	
     WriteSignedByte(file, header.number)
     WriteLongFixedString(file, header.typeName)
     WriteLong(file, header.reserved)
+	
+def getNormalMapEntryStructSize(entryStruct):
+    return 293 + getStringSize(entryStruct.diffuseTexName) + getStringSize(entryStruct.normalMap)
 
 def WriteNormalMapEntryStruct(file, entryStruct): 
     WriteLong(file, 83) #chunktype
-    WriteLong(file, 4 + 4 + len("DiffuseTexture") + 1 + 4 + len(entryStruct.diffuseTexName) + 1) #chunksize
+    WriteLong(file, 4 + 4 + getStringSize("DiffuseTexture") + 4 + getStringSize(entryStruct.diffuseTexName)) #chunksize
     WriteLong(file, 1) #texture type
-    WriteLong(file, len("DiffuseTexture") + 1) 
+    WriteLong(file, getStringSize("DiffuseTexture")) 
     WriteString(file, "DiffuseTexture")
     WriteLong(file, 1) #unknown value
     WriteString(file, entryStruct.diffuseTexName)
 	
     WriteLong(file, 83) #chunktype
-    WriteLong(file, 4 + 4 + len("NormalMap") + 1 + 4 + len(entryStruct.normalMap) + 1) #chunksize
+    WriteLong(file, 4 + 4 + getStringSize("NormalMap") + 4 + getStrinSize(entryStruct.normalMap)) #chunksize
     WriteLong(file, 1) #texture type
-    WriteLong(file, len("NormalMap") + 1) 
+    WriteLong(file, getStringSize("NormalMap")) 
     WriteString(file, "NormalMap")
     WriteLong(file, 1) #unknown value
     WriteString(file, entryStruct.normalMap)
 	
     WriteLong(file, 83) #chunktype
-    WriteLong(file, 4 + 4 + len("BumpScale") + 1 + 4) #chunksize
+    WriteLong(file, 4 + 4 + getStringSize("BumpScale") + 4) #chunksize
     WriteLong(file, 2) #bumpScale
-    WriteLong(file, len("BumpScale") + 1) 
+    WriteLong(file, getStringSize("BumpScale")) 
     WriteString(file, "BumpScale")
     WriteFloat(file, entryStruct.bumpScale)
 	
     WriteLong(file, 83) #chunktype
-    WriteLong(file, 4 + 4 + len("AmbientColor") + 1 + 16) #chunksize
+    WriteLong(file, 4 + 4 + getStringSize("AmbientColor") + 16) #chunksize
     WriteLong(file, 5) #color
-    WriteLong(file, len("AmbientColor") + 1) 
+    WriteLong(file, getStringSize("AmbientColor")) 
     WriteString(file, "AmbientColor")
     WriteFloat(file, entryStruct.ambientColor[0])
     WriteFloat(file, entryStruct.ambientColor[1])
@@ -578,9 +670,9 @@ def WriteNormalMapEntryStruct(file, entryStruct):
     WriteFloat(file, entryStruct.ambientColor[3])
 	
     WriteLong(file, 83) #chunktype
-    WriteLong(file, 4 + 4 + len("DiffuseColor") + 1 + 16) #chunksize
+    WriteLong(file, 4 + 4 + getStringSize("DiffuseColor") + 16) #chunksize
     WriteLong(file, 5) #color
-    WriteLong(file, len("DiffuseColor") + 1) 
+    WriteLong(file, getStringSize("DiffuseColor")) 
     WriteString(file, "DiffuseColor")
     WriteFloat(file, entryStruct.diffuseColor[0])
     WriteFloat(file, entryStruct.diffuseColor[1])
@@ -588,9 +680,9 @@ def WriteNormalMapEntryStruct(file, entryStruct):
     WriteFloat(file, entryStruct.diffuseColor[3])
 	
     WriteLong(file, 83) #chunktype
-    WriteLong(file, 4 + 4 + len("SpecularColor") + 1 + 16) #chunksize
+    WriteLong(file, 4 + 4 + getStringSize("SpecularColor") + 16) #chunksize
     WriteLong(file, 5) #color
-    WriteLong(file, len("SpecularColor") + 1) 
+    WriteLong(file, geStringSize("SpecularColor")) 
     WriteString(file, "SpecularColor")
     WriteFloat(file, entryStruct.specularColor[0])
     WriteFloat(file, entryStruct.specularColor[1])
@@ -598,29 +690,37 @@ def WriteNormalMapEntryStruct(file, entryStruct):
     WriteFloat(file, entryStruct.specularColor[3])
 	
     WriteLong(file, 83) #chunktype
-    WriteLong(file, 4 + 4 + len("SpecularExponent") + 1 + 4) #chunksize
+    WriteLong(file, 4 + 4 + getStringSize("SpecularExponent") + 4) #chunksize
     WriteLong(file, 2) #specularExponent
-    WriteLong(file, len("SpecularExponent") + 1) 
+    WriteLong(file, getStringSize("SpecularExponent")) 
     WriteString(file, "SpecularExponent")
     WriteFloat(file, entryStruct.specularExponent)
 	
     WriteLong(file, 83) #chunktype
-    WriteLong(file, 4 + 4 + len("AlphaTestEnable") + 1 + 1) #chunksize
+    WriteLong(file, 4 + 4 + getStringSize("AlphaTestEnable") + 1) #chunksize
     WriteLong(file, 7) #alphaTest
-    WriteLong(file, len("AlphaTestEnable") + 1) 
+    WriteLong(file, getStringSize("AlphaTestEnable")) 
     WriteString(file, "AlphaTestEnable")
     WriteUnsignedByte(file, entryStruct.alphaTestEnable)
+	
+def getNormalMapChunkSize(normalMap):
+    size = HEAD + getNormalMapHeaderChunkSize(normalMap.header)
+    size += HEAD + getNormalMapEntryStructSize(normalMap.entryStruct)
+    return size
 
 def WriteNormalMap(file, normalMap):
     WriteLong(file, 81) #chunktype
-    WriteLong(file, 45 + 301 + len(normalMap.entryStruct.diffuseTexName) + 1 + len(normalMap.entryStruct.normalMap) + 1) #chunksize
+    WriteLong(file, getNormalMapChunkSize(normalMap)) #chunksize
 
     WriteNormalMapHeader(file, normalMap.header)
     WriteNormalMapEntryStruct(file, normalMap.entryStruct)
 	
-def WriteMeshBumpMapArray(file, size, bumpMapArray):
+def getMeshBumpMapArrayChunkSize(bumpMapArray):
+    return HEAD + getNormalMapChunkSize(bumpMapArray.normalMap)
+	
+def WriteMeshBumpMapArray(file, bumpMapArray):
     WriteLong(file, 80) #chunktype
-    WriteLong(file, MakeChunkSize(size)) #chunksize
+    WriteLong(file, MakeChunkSize(getMeshBumpMapArrayChunkSize(bumpMapArray))) #chunksize
 
     WriteNormalMap(file, bumpMapArray.normalMap)
 	
@@ -628,52 +728,68 @@ def WriteMeshBumpMapArray(file, size, bumpMapArray):
 # AABTree (Axis-aligned-bounding-box)
 #######################################################################################	
 
-def WriteAABTreeHeader(file, size, header):
+def getAABTreeHeaderChunkSize(header):
+    return 8
+
+def WriteAABTreeHeader(file, header):
     WriteLong(file, 145) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getAABTreeHeaderChunkSize(header)) #chunksize
 
     WriteLong(file, header.nodeCount)
     WriteLong(file, header.polyCount)
+	
+def getAABTreePolyIndicesChunkSize(polyIndices):
+    return len(polyIndices) * 4
 
-def WriteAABTreePolyIndices(file, size, polyIndices):
+def WriteAABTreePolyIndices(file, polyIndices):
     WriteLong(file, 146) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getAABTreePolyIndicesChunkSize(polyIndices)) #chunksize
 	
     for poly in polyIndices:
         WriteLong(file, poly)
 
-def WriteAABTreeNodes(file, size, nodes):
+def getAABTreeNodesChunkSize(nodes):
+    return len(nodes) * 32		
+		
+def WriteAABTreeNodes(file, nodes):
     WriteLong(file, 147) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getAABTreeNodesChunkSize(nodes)) #chunksize
 	
     for node in nodes:
         WriteVector(file, node.min)
         WriteVector(file, node.max)
         WriteLong(file, node.frontOrPoly0)
         WriteLong(file, node.backOrPolyCount)
-
-def WriteAABTree(file, size, aabtree):
-    WriteLong(file, 144) #chunktype
-    WriteLong(file, MakeChunkSize(size)) #chunksize
-	
-    headerSize = 8
-    WriteAABTreeHeader(file, headerSize, aabtree.header)
-    
-    polySize = len(aabtree.polyIndices) * 4
+		
+def getAABTreeChunkSize(aabtree):
+    size = HEAD + getAABTreeHeaderChunkSize(aabtree.header)
     if polySize > 0:
-        WriteAABTreePolyIndices(file, polySize, aabtree.polyIndices)
-	
-    nodeSize = len(aabtree.nodes) * 32
+        size += HEAD + getAABTreePolyIndicesChunkSize(aabtree.polyIndices)
     if nodeSize > 0:
-        WriteAABTreeNodes(file, nodeSize, aabtree.nodes)
+        size += HEAD + getAABTreeNodesChunkSize(aabtree.nodes)
+
+def WriteAABTree(file, aabtree):
+    WriteLong(file, 144) #chunktype
+    WriteLong(file, MakeChunkSize(getAABTreeChunkSize(aabtree))) #chunksize
+	
+    WriteAABTreeHeader(file, aabtree.header)
+    
+    if len(aabtree.polyIndices) > 0:
+        WriteAABTreePolyIndices(file, aabtree.polyIndices)
+	
+    if len(aabtree.nodes) > 0:
+        WriteAABTreeNodes(file, aabtree.nodes)
 		
 #######################################################################################
 # Mesh
-#######################################################################################	
+#######################################################################################
 
-def WriteMeshHeader(file, size, header): 
+def getMeshHeaderChunkSize(header):
+    return 116	
+
+def WriteMeshHeader(file, header): 
     WriteLong(file, 31) #chunktype
-    WriteLong(file, size) #chunksize
+    WriteLong(file, getMeshHeaderChunkSize(header)) #chunksize
 	
     #print("## Name: " + header.meshName)
     WriteLong(file, MakeVersion(header.version)) 
@@ -694,128 +810,81 @@ def WriteMeshHeader(file, size, header):
     WriteVector(file, header.sphCenter) 
     WriteFloat(file, header.sphRadius) 
 	
+def getMeshChunkSize(mesh):
+    size = HEAD + getMeshHeaderChunkSize(mesh.header)
+    size += HEAD + getMeshVerticesArrayChunkSize(mesh.verts)
+    size += HEAD + getMeshVerticesArrayChunkSize(mesh.normals)
+    size += HEAD + getMeshFaceArrayChunkSize(mesh.faces)
+    size += HEAD + len(mesh.shadeIds) * 4 #shade indices
+    if not mesh.userText == "":
+        size += HEAD + getStringSize(mesh.userText)
+    if len(mesh.vertInfs) > 0:
+        size += HEAD + getMeshVertexInfluencesChunkSize(mesh.vertInfs)
+    size += HEAD + getMeshMaterialSetInfoChunkSize(mesh.matInfo)
+    if len(mesh.vertMatls) > 0:
+        size += HEAD + getMeshMaterialArrayChunkSize(mesh.vertMatls)
+    if len(mesh.shaders) > 0:
+        size += HEAD + getMeshShaderArrayChunkSize(mesh.shaders)
+    if len(mesh.textures) > 0:
+        size += HEAD + getTextureArrayChunkSize(mesh.textures)
+    if mesh.matInfo.passCount > 0:
+        size += HEAD + getMeshMaterialPassChunkSize(mesh.matlPass)
+		
+    #if not mesh.bumpMaps.normalMap.entryStruct.diffuseTexName == "":
+    #    size += HEAD + getMeshBumpMapArrayChunkSize(mesh.bumpMaps)
+    #if (mesh.aabtree.header.nodeCount > 0) or (mesh.aabtree.header.polyCount > 0):
+    #    size += HEAD + getAABTreeChunkSize(mesh.aabtree)
+    return size
+	
 def WriteMesh(file, mesh):
     #print("\n### NEW MESH: ###")
     WriteLong(file, 0) #chunktype
+    WriteLong(file, MakeChunkSize(getMeshChunkSize(mesh))) #chunksize
 	
-    headerSize = 116
-    vertSize = len(mesh.verts) * 12
-    vertCopySize = len(mesh.verts_copy) * 12
-    normSize = len(mesh.normals) * 12
-    normCopySize = len(mesh.normals_copy) * 12
-    faceSize = len(mesh.faces) * 32
-    shadeIndicesSize = len(mesh.verts) * 4
-    userTextSize = 0
-    if not mesh.userText ==  "":
-        userTextSize = len(mesh.userText) + 1
-    infSize = len(mesh.vertInfs) * 8
-    matSetInfoSize = 16
-    matArraySize = HEAD
-    textureArraySize = HEAD
-
-    for mat in mesh.vertMatls: 
-        matArraySize += HEAD + len(mat.vmName) + 1 + HEAD + 32
-        if len(mat.vmArgs0) > 0:
-            matArraySize += HEAD + len(mat.vmArgs0) + 1
-        if len(mat.vmArgs1) > 0:
-            matArraySize += HEAD + len(mat.vmArgs1) + 1
-			
-        if not mat.vmName == "":
-            for tex in mesh.textures:
-               textureArraySize += HEAD + len(tex.name) + 1 #+ HEAD + 12
-     
-    shaderArraySize = len(mesh.shaders) * 16
-	 
-    materialPassSize = (HEAD + len(mesh.matlPass.vmIds) * 4 + HEAD + len(mesh.matlPass.shaderIds) * 4)
-    if len(mesh.matlPass.dcg) > 0:
-        materialPassSize += HEAD + len(mesh.matlPass.dcg) * 4
-    if len(mesh.matlPass.txStage.txIds) > 0:		
-        materialPassSize += HEAD + HEAD + len(mesh.matlPass.txStage.txIds) * 4 + HEAD + len(mesh.matlPass.txStage.txCoords) * 8
-    bumpMapArraySize = (HEAD + 45 + 301 + len(mesh.bumpMaps.normalMap.entryStruct.diffuseTexName) + 1 + len(mesh.bumpMaps.normalMap.entryStruct.normalMap) + 1)
-	
-    aabtreeSize = HEAD + 8	
-    if mesh.aabtree.header.polyCount > 0:
-        aabtreeSize += HEAD + len(mesh.aabtree.polyIndices) * 4
-    if mesh.aabtree.header.nodeCount > 0:
-        aabtreeSize += HEAD + len(mesh.aabtree.nodes) * 32
-	
-	#size of the mesh chunk
-    size = HEAD + headerSize 
-    size += HEAD + vertSize 
-    if vertCopySize > 0:
-        size += HEAD + vertCopySize
-    size += HEAD + normSize 
-    if  normCopySize > 0:
-        size += HEAD + normCopySize
-    size += HEAD + faceSize 
-    size += HEAD + shadeIndicesSize
-    if not mesh.userText ==  "":
-        size += HEAD + userTextSize
-    if len(mesh.vertInfs) > 0:
-        size += HEAD + infSize 
-    size += HEAD + matSetInfoSize 
-    if mesh.matInfo.vertMatlCount > 0:
-        size += HEAD + matArraySize
-    if mesh.matInfo.textureCount > 0:
-        size += HEAD + textureArraySize 
-    if mesh.matInfo.shaderCount > 0:
-        size += HEAD + shaderArraySize
-    if mesh.matInfo.passCount > 0:
-        size += HEAD + materialPassSize
-    if not mesh.bumpMaps.normalMap.entryStruct.diffuseTexName == "":
-        size += HEAD + bumpMapArraySize
-    if (mesh.aabtree.header.nodeCount > 0) or (mesh.aabtree.header.polyCount > 0):
-        size += HEAD + aabtreeSize
-    
-    WriteLong(file, MakeChunkSize(size)) #chunksize
-	
-    WriteMeshHeader(file, headerSize, mesh.header)
+    WriteMeshHeader(file, mesh.header)
     #print("Header")
-    WriteMeshVerticesArray(file, vertSize, mesh.verts)
+    WriteMeshVerticesArray(file, mesh.verts)
     #print("Vertices")
-    if vertCopySize > 0:
-        WriteMeshVerticesCopyArray(file, vertCopySize, mesh.verts_copy)
-        #print("Vertices Copy")
-    WriteMeshNormalArray(file, normSize, mesh.normals)
+    WriteMeshNormalArray(file, mesh.normals)
     #print("Normals")
-    if normCopySize > 0:
-        WriteMeshNormalCopyArray(file, normCopySize, mesh.normals_copy)
-        #print("Normals Copy")
-    WriteMeshFaceArray(file, faceSize, mesh.faces)
+    WriteMeshFaceArray(file, mesh.faces)
     #print("Faces")
+	
+    WriteLong(file, 34) #chunktype
+    WriteLong(file, len(mesh.verts) * 4) #chunksize
+    WriteLongArray(file, mesh.shadeIds)
+    #print("VertexShadeIndices")	
+	
     if not mesh.userText ==  "":
         WriteLong(file, 12) #chunktype
-        WriteLong(file, userTextSize) #chunksize
+        WriteLong(file, getStringSize(mesh.userText)) #chunksize
         WriteString(file, mesh.userText)
         #print("UserText")
-    if len(mesh.vertInfs) > 0:
-        WriteMeshVertexInfluences(file, infSize, mesh.vertInfs) 
-        #print("Vertex Influences")
 		
-    WriteLong(file, 34) #chunktype
-    WriteLong(file, shadeIndicesSize) #chunksize
-    WriteLongArray(file, mesh.shadeIds)
-    #print("VertexShadeIndices")
+    if len(mesh.vertInfs) > 0:
+        WriteMeshVertexInfluences(file, mesh.vertInfs) 
+        #print("Vertex Influences")
 	
-    WriteMeshMaterialSetInfo(file, matSetInfoSize, mesh.matInfo)
+    WriteMeshMaterialSetInfo(file, mesh.matInfo)
     #print("MaterialSetInfo")
     if mesh.matInfo.vertMatlCount > 0:
-        WriteMeshMaterialArray(file, matArraySize, mesh.vertMatls)
+        WriteMeshMaterialArray(file, mesh.vertMatls)
         #print("Materials")
-    if mesh.matInfo.shaderCount > 0:
-        WriteMeshShaderArray(file, shaderArraySize, mesh.shaders)
+    if len(mesh.shaders) > 0:
+        WriteMeshShaderArray(file, mesh.shaders)
         #print("Shader")
-    if mesh.matInfo.textureCount > 0:
-        WriteTextureArray(file, textureArraySize, mesh.textures)
+    if len(mesh.textures) > 0:
+        WriteTextureArray(file, mesh.textures)
         #print("Textures")
     if mesh.matInfo.passCount > 0:
-        WriteMeshMaterialPass(file, materialPassSize, mesh.matlPass)
+        WriteMeshMaterialPass(file, mesh.matlPass)
         #print("MaterialPass")
-    if not mesh.bumpMaps.normalMap.entryStruct.normalMap == "":
-        WriteMeshBumpMapArray(file, bumpMapArraySize, mesh.bumpMaps)
+		
+    #if not mesh.bumpMaps.normalMap.entryStruct.normalMap == "":
+    #    WriteMeshBumpMapArray(file, mesh.bumpMaps)
         #print("BumpMaps")
-    if (mesh.aabtree.header.nodeCount > 0) or (mesh.aabtree.header.polyCount > 0):
-        WriteAABTree(file, aabtreeSize, mesh.aabtree)
+    #if (mesh.aabtree.header.nodeCount > 0) or (mesh.aabtree.header.polyCount > 0):
+    #    WriteAABTree(file, mesh.aabtree)
         #print("AABTree")
 		
 #######################################################################################
@@ -860,32 +929,95 @@ def calculateMeshSphere(mesh, Header):
     Header.sphRadius = radius
 	
 #######################################################################################
-# compare the hierarchy with the existing skl file
-#######################################################################################		
+# get Animation data
+#######################################################################################	
+	
+def getAnimationData(context, aniName, rig, Hierarchy):
+    Animation = struct_w3d.Animation()
+    Animation.header.name = aniName
+    Animation.header.hieraName = Hierarchy.header.name
+    Animation.header.numFrames = bpy.data.scenes["Scene"].frame_end
+    Animation.header.frameRate = bpy.data.scenes["Scene"].render.fps
 
-def compareHierarchy(sklPath, Hierarchy, self, context):
-    skl = import_w3d.LoadSKL(self, sklPath)
-    #test if all pivots from the scene are in the skl file 
-    for pivot in Hierarchy.pivots:
-        found = False
-        for p in skl.pivots:
-            if pivot.name == p.name:
-                found = True
-        if not found:
-            context.report({'ERROR'}, "missing pivot " + pivot.name + " in .skl file!")
-            print("Error: missing pivot " + pivot.name + " in .skl file!")   
-            return False
-    return True			
-
+    rigList = [object for object in bpy.context.scene.objects if object.type == 'ARMATURE']
+    if len(rigList) == 1:
+        rig = rigList[0]
+        index = 0
+        for pivot in Hierarchy.pivots:
+            if pivot.name == "ROOTTRANSFORM":
+                index += 1
+                continue
+			
+            #last_location = Vector((pivot.position.x, pivot.position.y, pivot.position.z))
+            #last_rotation = Quaternion((pivot.rotation.w, pivot.rotation.x, pivot.rotation.y, pivot.rotation.z))
+			
+            try:
+                obj = rig.pose.bones[pivot.name]
+            except:
+                obj = bpy.data.objects[pivot.name]
+				
+            qChannel = struct_w3d.AnimationChannel()
+            qChannel.firstFrame = 0
+            qChannel.lastFrame = bpy.data.scenes["Scene"].frame_end - 1
+            qChannel.vectorLen = 4
+            qChannel.type = 6
+            qChannel.pivot = index
+            qChannel.data = []
+				
+            if obj.parent == None:
+                xChannel = struct_w3d.AnimationChannel()
+                xChannel.firstFrame = 0
+                xChannel.lastFrame = bpy.data.scenes["Scene"].frame_end - 1
+                xChannel.vectorLen = 1
+                xChannel.type = 0
+                xChannel.pivot = index
+                xChannel.data = []
+				
+                yChannel = struct_w3d.AnimationChannel()
+                yChannel.firstFrame = 0
+                yChannel.lastFrame = bpy.data.scenes["Scene"].frame_end - 1
+                yChannel.vectorLen = 1
+                yChannel.type = 1
+                yChannel.pivot = index
+                yChannel.data = []
+				
+                zChannel = struct_w3d.AnimationChannel()
+                zChannel.firstFrame = 0
+                zChannel.lastFrame = bpy.data.scenes["Scene"].frame_end - 1
+                zChannel.vectorLen = 1
+                zChannel.type = 2
+                zChannel.pivot = index
+                zChannel.data = []
+			
+            for frame in range(0, Animation.header.numFrames - 1):
+                bpy.context.scene.frame_set(frame)
+                qChannel.data.append(obj.rotation_quaternion)
+                if obj.parent == None:
+                    xChannel.data.append(obj.location.x)
+                    yChannel.data.append(obj.location.y)
+                    zChannel.data.append(obj.location.z)
+            
+            if obj.parent == None:
+                Animation.channels.append(xChannel)
+                Animation.channels.append(yChannel)
+                Animation.channels.append(zChannel)
+            Animation.channels.append(qChannel)
+            index += 1
+    else:
+        context.report({'ERROR'}, "only one armature allowed!")
+        print("Error: only one armature allowed!") 
+    return Animation
+				
 #######################################################################################
 # Main Export
 #######################################################################################	
 
-def MainExport(givenfilepath, self, context, EXPORT_MODE = 'HM', USE_SKL_FILE = False, OBJECTS = ''):
+def MainExport(givenfilepath, self, context, EXPORT_MODE = 'M'):
     #print("Run Export")
     HLod = struct_w3d.HLod()
     HLod.lodArray.subObjects = []
     Hierarchy = struct_w3d.Hierarchy()
+    amtName = ""
 	
     roottransform = struct_w3d.HierarchyPivot()
     roottransform.name = "ROOTTRANSFORM"
@@ -898,32 +1030,29 @@ def MainExport(givenfilepath, self, context, EXPORT_MODE = 'HM', USE_SKL_FILE = 
 	
     # Get all the armatures in the scene.
     rigList = [object for object in bpy.context.scene.objects if object.type == 'ARMATURE']
-    for rig in rigList:
+    if len(rigList) == 1:
+        rig = rigList[0]
+        amtName = rig.name
         for bone in rig.pose.bones:
-             pivot = struct_w3d.HierarchyPivot()
-             pivot.name = bone.name
-             if not bone.parent == None:
-                 ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == bone.parent.name] #return an array of indices (in this case only one value)
-                 pivot.parentID = ids[0]
-             else:
-                 pivot.parentID = 0
-             pivot.position = bone.location
-             pivot.eulerAngles = bone.rotation_euler
-             pivot.rotation = bone.rotation_quaternion
-             Hierarchy.pivots.append(pivot)		
-	
-    objList = []
-    if EXPORT_MODE == 'SM':
-        objList.append(bpy.context.scene.objects[OBJECTS])
+            pivot = struct_w3d.HierarchyPivot()
+            pivot.name = bone.name
+            if not bone.parent == None:
+                ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == bone.parent.name] #return an array of indices (in this case only one value)
+                pivot.parentID = ids[0]
+            else:
+                pivot.parentID = 0
+            pivot.position = bone.location
+            pivot.eulerAngles = bone.rotation_euler
+            pivot.rotation = bone.rotation_quaternion
+            Hierarchy.pivots.append(pivot)	
     else:
-        # Get all the mesh objects in the scene.
-        objList = [object for object in bpy.context.scene.objects if object.type == 'MESH']
+        context.report({'ERROR'}, "only one armature allowed!")
+        print("Error: only one armature allowed!") 			
+
+    # Get all the mesh objects in the scene.
+    objList = [object for object in bpy.context.scene.objects if object.type == 'MESH']
 	
-    if not EXPORT_MODE == 'S':
-         #make sure the skin file ends with _skn.w3d -> not needed
-         #if not givenfilepath.endswith("_skn.w3d"):
-         #    givenfilepath = givenfilepath.replace(".w3d", "_skn.w3d")
-	
+    if EXPORT_MODE == 'M' or EXPORT_MODE == 'HAM':
         sknFile = open(givenfilepath, "wb")
         containerName = (os.path.splitext(os.path.basename(sknFile.name))[0]).upper()
 		
@@ -947,7 +1076,6 @@ def MainExport(givenfilepath, self, context, EXPORT_MODE = 'HM', USE_SKL_FILE = 
                 verts = []
                 normals = [] 
                 faces = []
-                uvs = []
                 vertInfs = []
                 vertexShadeIndices = []
 
@@ -1112,62 +1240,48 @@ def MainExport(givenfilepath, self, context, EXPORT_MODE = 'HM', USE_SKL_FILE = 
             subObject.boneIndex = 0
             ids = [index for index, pivot in enumerate(Hierarchy.pivots) if pivot.name == mesh_ob.name] #return an array of indices (in this case only one value)
             if len(ids) > 0:
+                #if the mesh is of type skin, the bone is created for this mesh and the boneIndex in HLod is 0
                 if Header.attrs == 0 or Header.attrs == 8192 or Header.attrs == 32768 or Header.attrs == 40960:
 	                subObject.boneIndex = ids[0]
             HLod.lodArray.subObjects.append(subObject)
 
     Hierarchy.header.pivotCount = len(Hierarchy.pivots)
 		
-    #test if we want to export a skeleton file or use an existing
-    sklPath = ""
-    if givenfilepath.endswith("skn.w3d"):
-        sklPath = givenfilepath.replace("skn", "skl")
-    else:
-        sklPath = givenfilepath.replace(".w3d", "_skl.w3d")
-    sklName = (os.path.splitext(os.path.basename(sklPath))[0]).upper()
+    sklPath = givenfilepath.replace(".w4d", "_skl.w4d")
+    sklName = (os.path.splitext(os.path.basename(sklPath))[0])
 	
-    if EXPORT_MODE == 'HM' or EXPORT_MODE == 'HAM' or EXPORT_MODE == 'S':
+    if EXPORT_MODE == 'HAM' or EXPORT_MODE == 'S' or EXPORT_MODE == 'M':
         if len(rigList) == 1:
-            if USE_SKL_FILE and not EXPORT_MODE == 'S':
-                try:
-                    if compareHierarchy(rigList[0]['sklFile'], Hierarchy, self, context):
-                        sklName = (os.path.splitext(os.path.basename(rigList[0]['sklFile']))[0]).upper()	
-                        HLod.header.HTreeName = sklName
-                except:
-                    context.report({'ERROR'}, "armature object has no property: sklFile!")
-                    print("armature object has no property: sklFile!")	
-					
-                    #so save the skeleton to a new file
-                    sklFile = open(sklPath,"wb")
-                    Hierarchy.header.name = sklName
-                    WriteHierarchy(sklFile, Hierarchy)
-                    HLod.header.HTreeName = sklName
-                    sklFile.close()
-            else:
-                sklFile = open(sklPath,"wb")
+            if EXPORT_MODE == 'S':
+                sklFile = open(sklPath.replace(sklName, amtName.lower()), "wb")
                 Hierarchy.header.name = sklName
                 WriteHierarchy(sklFile, Hierarchy)
-                HLod.header.HTreeName = sklName
                 sklFile.close()
-				
-        elif len(rigList) > 1:
-            # if the rig list is > 1 then we always have to export a new skl file
-            sklFile = open(sklPath,"wb")
-            Hierarchy.header.name = sklName
-            WriteHierarchy(sklFile, Hierarchy)
-            HLod.header.HTreeName = sklName
-            File.close()
+            elif EXPORT_MODE == 'M':
+                HLod.header.HTreeName = amtName
 				
 		#write the hierarchy to the skn file (has no armature data)
-        elif not EXPORT_MODE == 'S':
-            Hierarchy.header.name = containerName	  
+        elif EXPORT_MODE == 'HAM':
+            Hierarchy.header.name = containerName 
             WriteHierarchy(sknFile, Hierarchy)
             HLod.header.HTreeName = containerName
         else:
             context.report({'ERROR'}, "no armature data available!!")
-            print("no armature data available!!")	
+            print("no armature data available!!")
+
+    if EXPORT_MODE == 'A' or EXPORT_MODE == 'HAM':
+        if EXPORT_MODE == 'A':
+            aniFile = open(givenfilepath, "wb")
+            aniName = (os.path.splitext(os.path.basename(aniFile.name))[0]).upper()
+            Hierarchy.header.name = amtName
+            Animation = getAnimationData(context, aniName, rig, Hierarchy)
+            WriteAnimation(aniFile, Animation)
+            aniFile.close()
+        else:
+            Animation = getAnimationData(context, containerName, rig, Hierarchy)
+            WriteAnimation(sknFile, Animation)
 	
-    if not (EXPORT_MODE == 'SM' or EXPORT_MODE == 'S'):
+    if EXPORT_MODE == 'M' or EXPORT_MODE == 'HAM':
         HLod.lodArray.header.modelCount = len(HLod.lodArray.subObjects)
         HLod.header.modelName = containerName
         WriteHLod(sknFile, HLod)
