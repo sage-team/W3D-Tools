@@ -35,6 +35,23 @@ from . import struct_w3d
 #	64 size of 4 bytes
 
 
+def InsensitiveOpen(sklpath):
+    #find the file on unix
+    dir = os.path.dirname(sklpath)
+    name = os.path.basename(sklpath)
+    print(dir)
+    print(name)
+    files = [f for f in os.listdir(dir) if os.path.isfile(f)]
+    print(len(files))
+    files_up = []
+    for file in files:
+        print(file)
+        files_up.append(upper(file))
+    for index,file in enumerate(files_up):
+        if file == upper(name):
+            print(files[index])
+            return open(files[index], "rb")
+
 #######################################################################################
 # Basic Methods
 #######################################################################################
@@ -992,7 +1009,7 @@ def ReadMesh(self, file, chunkEnd):
 
 def LoadTexture(self, givenfilepath, mesh, texName, tex_type, destBlend):
     script_directory = os.path.dirname(os.path.abspath(__file__))
-    default_tex = script_directory + "\default_tex.dds"
+    default_tex = script_directory + "/default_tex.dds"
 
     found_img = False
 
@@ -1054,7 +1071,7 @@ def LoadTexture(self, givenfilepath, mesh, texName, tex_type, destBlend):
 def LoadSKL(self, sklpath):
     #print("\n### SKELETON: ###")
     Hierarchy = struct_w3d.Hierarchy()
-    file = open(sklpath, "rb")
+    file = InsensitiveOpen(sklpath)
     file.seek(0,2)
     filesize = file.tell()
     file.seek(0,0)
@@ -1143,7 +1160,7 @@ def createArmature(self, Hierarchy, amtName, subObjects):
     bpy.ops.object.mode_set(mode = 'POSE')
     
     script_directory = os.path.dirname(os.path.abspath(__file__))
-    bone_file = script_directory + "\\bone.W3D"
+    bone_file = script_directory + "/bone.W3D"
     
     bone_shape = loadBoneMesh(self, bone_file)
 
@@ -1358,7 +1375,7 @@ def MainImport(givenfilepath, context, self):
     #load skeleton (_skl.w3d) file if needed 
     sklpath = ""
     if HLod.header.modelName != HLod.header.HTreeName:
-        sklpath = os.path.dirname(givenfilepath) + "\\" + HLod.header.HTreeName.lower() + ".w3d"
+        sklpath = os.path.dirname(givenfilepath) + "/" + HLod.header.HTreeName.lower() + ".w3d"
         try:
             Hierarchy = LoadSKL(self, sklpath)
         except:
@@ -1366,7 +1383,7 @@ def MainImport(givenfilepath, context, self):
             print("!!! skeleton file not found: " + HLod.header.HTreeName)
             
     elif (not Animation.header.name == "") and (Hierarchy.header.name == ""):
-        sklpath = os.path.dirname(givenfilepath) + "\\" + Animation.header.hieraName.lower() + ".w3d"
+        sklpath = os.path.dirname(givenfilepath) + "/" + Animation.header.hieraName.lower() + ".w3d"
         try:
             Hierarchy = LoadSKL(self, sklpath)
         except:
@@ -1374,7 +1391,7 @@ def MainImport(givenfilepath, context, self):
             print("!!! skeleton file not found: " + Animation.header.hieraName)
             
     elif (not CompressedAnimation.header.name == "") and (Hierarchy.header.name == ""):
-        sklpath = os.path.dirname(givenfilepath) + "\\" + CompressedAnimation.header.hieraName.lower() + ".w3d"
+        sklpath = os.path.dirname(givenfilepath) + "/" + CompressedAnimation.header.hieraName.lower() + ".w3d"
         try:
             Hierarchy = LoadSKL(self, sklpath)
         except:

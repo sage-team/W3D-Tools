@@ -22,9 +22,9 @@
 
 bl_info = {
     'name': 'Import/Export Westwood W3D Format (.w3d)',
-    'author': 'Arathorn & Tarcontar',
+    'author': 'Stephan Vedder, Michael Schnabel',
     'version': (1, 0, 0),
-    "blender": (2, 6, 0),
+    "blender": (2, 77, 0),
     'location': 'File > Import/Export > Westerwood W3D (.w3d)',
     'description': 'Import or Export the Westerwood W3D-Format (.w3d)',
     'warning': 'Still in Progress',
@@ -34,14 +34,10 @@ bl_info = {
 # To support reload properly, try to access a package var, if it's there,
 # reload everything
 if "bpy" in locals():
-    import imp
-    if 'import_w3d' in locals():
-        imp.reload(import_w3d)
-        imp.reload(struct_w3d)
-
-    if 'export_w3d' in locals():
-        imp.reload(export_w3d)
-        imp.reload(struct_w3d)
+    import importlib
+    importlib.reload(import_w3d)
+    importlib.reload(export_w3d)
+    importlib.reload(struct_w3d)
 
 import time
 import datetime
