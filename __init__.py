@@ -25,11 +25,10 @@ bl_info = {
     'author': 'Arathorn & Tarcontar',
     'version': (1, 0, 0),
     "blender": (2, 6, 0),
-    "api": 36079,
     'location': 'File > Import/Export > Westerwood W3D (.w3d)',
     'description': 'Import or Export the Westerwood W3D-Format (.w3d)',
     'warning': 'Still in Progress',
-	'tracker_url': 'http://forum.modding-union.com/index.php/topic,15838.0.html',
+    'tracker_url': 'http://forum.modding-union.com/index.php/topic,15838.0.html',
     'category': 'Import-Export'}
 
 # To support reload properly, try to access a package var, if it's there,
@@ -56,7 +55,7 @@ class ImportW3D(bpy.types.Operator, ImportHelper):
     bl_idname = 'import_mesh.westwood_w3d'
     bl_label = 'Import W3D'
     bl_options = {'UNDO'}
-	
+    
     filename_ext = '.w3d'
     filter_glob = StringProperty(default='*.w3d', options={'HIDDEN'})
 
@@ -75,19 +74,19 @@ class ExportW3D(bpy.types.Operator, ExportHelper):
     bl_idname = 'export_mesh.westwood_w3d'
     bl_label = 'Export W3D'
     bl_options = {'UNDO'}
-	
+    
     filename_ext = '.w3d'
     filter_glob = StringProperty(default='*.w3d', options={'HIDDEN'})
-	
+    
     EXPORT_MODE = EnumProperty(
             name="Export Mode",
              items=(('M', "Model", "this will export all the meshes of the scene, without skeletons or animation"), 
-			    ('S', "Skeleton", "this will export the hierarchy tree without any geometry or animation data"), 
-			    ('A', "Animation", "this will export the animation without any geometry data or skeletons"), 
-			    ('HAM', "HierarchicalAnimatedModel", "this will export the meshes with the hierarchy and animation into one file")
-			    ),			
-			default='M',)	
-		
+                ('S', "Skeleton", "this will export the hierarchy tree without any geometry or animation data"), 
+                ('A', "Animation", "this will export the animation without any geometry data or skeletons"), 
+                ('HAM', "HierarchicalAnimatedModel", "this will export the meshes with the hierarchy and animation into one file")
+                ),			
+            default='M',)	
+        
     def execute(self, context):
         from . import export_w3d
         keywords = self.as_keywords(ignore=("filter_glob", "check_existing", "filepath"))		
@@ -98,7 +97,7 @@ class ExportW3D(bpy.types.Operator, ExportHelper):
         t = time.mktime(datetime.datetime.now().timetuple()) - t
         print('Finished exporting in', t, 'seconds')
         return {'FINISHED'}	
-		
+        
 def menu_func_export(self, context):
     self.layout.operator(ExportW3D.bl_idname, text='Westwood W3D (.w3d)')
 

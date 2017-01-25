@@ -313,101 +313,38 @@ def FromSageFloat16(s):
 		
 def ReadTimeCodedAnimationVector(file, self, chunkEnd):
 	print("##############") 
-	#print("chunk begin: ", file.tell())
-	CompressionType = ReadShort(file) #0 or 256 or 512 -> 0, 8 or 16 bit?
-	VectorLen = ReadUnsignedByte(file)
-	Type = ReadUnsignedByte(file) #is x or y or z or quat  #what is type 15 (visibility?)?? (vecLen = 1)
-	TimeCodesCount = ReadShort(file) #1 or number of frames
-	Pivot = ReadShort(file)
-	TimeCodedKeys = []
-	print(CompressionType, VectorLen, Type, TimeCodesCount, Pivot)
-	count = 0
-
-	databegin = file.tell()
-  
-	#if CompressionType == 0:
-	#	 if Type == 6:
-			#(18 + 2)
-			#print("# 0, quat:" , file.tell())
-	#		 while file.tell() <= chunkEnd - 18: # 20:1 36:2 56:3 72:4 92:5 108:6 128:7 144:8 164:9 180:10 200:11 216:12   
-				#print(ReadUnsignedByte(file))
-				#print(ReadUnsignedByte(file))
-				#print(ReadShort(file))
-				#print(ReadQuaternion(file))
-				#print(ReadLong(file))
-	#			 file.read(18)
-				#ReadShort(file)
-	#			 count += 18
-	#		 if file.tell() < chunkEnd:
-	#			 file.read(2) #padding (2 bytes if the TimeCodesCount is uneven)
-	#			 count += 2
-	#	 else:
-			# (6 + 2)
-			#print("# 0 :", Type, file.tell())
-	#		 while file.tell() <= chunkEnd - 6: # 8:1 32:5 56:9 
-				#Data.append(ReadShort(file)) #still some weird values in here
-				#Data.append(ReadFloat(file))
-				#print("#####")
-				#ReadShort(file)
-				#print(ReadFloat(file))
-				#print(ReadFloat(file))
-				#print(FromSageFloat16(ReadShort(file)))
-	#			 file.read(6)
-	#			 count += 6
-	#		 if file.tell() < chunkEnd:
-	#			 file.read(2) #padding (2 bytes if the TimeCodesCount is uneven)
-	#			 count += 2
-				
-	#elif CompressionType == 256: #8 bit compression?
-	#	 if Type == 6:
-			#print("# 256, quat: " , file.tell())
-	#		 while file.tell() < chunkEnd: # 56:16 (92:21 92:30) (128:36 128:40 128:45) (200:66 200:75) (236:84 236:90) 308:117 344:144 380:157
-				#print(ReadUnsignedByte(file) & 0xFFFF)
-	#			 file.read(1)
-				#print(FromSageFloat16(ReadShort(file)))
-				#print(ReadUnsignedByte(file))
-				#file.read(3)
-	#			 count += 1
-	#	 else:
-			#print("# 256 : ", Type, file.tell())
-	#		 while file.tell() < chunkEnd: # 17:16 26:21 (35:36 35:45) 62:90 71:100 89:144
-				#print(ord(file.read(1)))
-				#print(ReadUnsignedByte(file))
-	#			 file.read(1)
-				#ReadFloat8(file)
-	#			 count += 1
-				
-	#elif CompressionType == 512: #16 bit compression?
-	#	 if Type == 6:
-			#print("# 512, quat:", file.tell())
-	#		 while file.tell() < chunkEnd: # (156:21 156:30) 224:45 292:64 (360:66 360:72)
-	#			 file.read(1)
-	#			 count += 1
-	#	 else:
-			#print("# 512 : ", Type, file.tell())
-	#		 while file.tell() < chunkEnd: # 25:16 59:42 (93:66 93:75) 110:90 
-	#			 file.read(1)
-	#			 count += 1
-				
-				
-	while file.tell() < chunkEnd - 2:
-		#print(ReadUnsignedByte(file))
-		#file.read(1) 
-		#print(ReadUnsignedByte(file))
-		print(file.read(1))
-		#print(ReadUnsignedByte(file))
-		#PrintByte(file)
-		count += 1
+	zero = ReadUnsignedByte(file)
+	delta = ReadUnsignedByte(file)
+	vecLen = ReadUnsignedByte(file)
+	flag = ReadUnsignedByte(file)
+	count = ReadShort(file)
+	pivot = ReadShort(file)
+	print(zero, delta, vecLen, flag, count, pivot)
 	
+	if delta == 0:	
+		for x in range(0, count):
+			print(ReadUnsignedShort(file))
+		
+		print("### data")
+		#skip 2 bytes if uneven
+		if (count % 2) > 0: 
+			file.read(2)
+			
+		print ("remaining bytes: ", chunkEnd - file.tell())
+			
+		for x in range(0, count * vecLen):
+			print(ReadFloat(file))
+		
+	
+	i = 0
 	while file.tell() < chunkEnd:
+		i += 1
+		#print(ReadUnsignedByte(file))
 		file.read(1)
-				
-	#print("#", count)
-	#print(file.tell())
-	#print("data begin:", databegin)
-	
-	#return struct_w3d.TimeCodedAnimationVector(magicNum = CompressionType, vectorLen = VectorLen, type = Type, 
-	#	timeCodesCount = TimeCodesCount, pivot = Pivot, timeCodedKeys = TimeCodedKeys)
+		
+	print(i)
+  
+
 
 def ReadCompressedAnimation(file, self, chunkEnd):
 	print("\n### NEW COMPRESSED ANIMATION: ###")

@@ -55,3 +55,12 @@ target/
 
 # Blender addon cache
 __pycache__/
+
+# PyCharm
+.idea
+
+# VsCode
+.vscode
+
+w3dtools
+w3dtools.zip
