@@ -35,22 +35,26 @@ from . import struct_w3d
 #	64 size of 4 bytes
 
 
-def InsensitiveOpen(sklpath):
+def InsensitiveOpen(path):
     #find the file on unix
-    dir = os.path.dirname(sklpath)
-    name = os.path.basename(sklpath)
-    print(dir)
-    print(name)
-    files = [f for f in os.listdir(dir) if os.path.isfile(f)]
-    print(len(files))
-    files_up = []
-    for file in files:
-        print(file)
-        files_up.append(upper(file))
-    for index,file in enumerate(files_up):
-        if file == upper(name):
-            print(files[index])
-            return open(files[index], "rb")
+    dir = os.path.dirname(path)
+    name = os.path.basename(path)
+    
+    for filename in os.listdir(dir):
+        if filename.lower()==name.lower():
+            path = os.path.join(dir,filename)
+            return open(path,"rb")
+        
+def InsensitivePath(path)
+     #find the file on unix
+    dir = os.path.dirname(path)
+    name = os.path.basename(path)
+    
+    for filename in os.listdir(dir):
+        if filename.lower()==name.lower():
+            path = os.path.join(dir,filename)
+
+    return path
 
 #######################################################################################
 # Basic Methods
@@ -1028,6 +1032,8 @@ def LoadTexture(self, givenfilepath, mesh, texName, tex_type, destBlend):
     if found_img == False:
         tgapath = os.path.dirname(givenfilepath) + "/" + basename + ".tga"
         ddspath = os.path.dirname(givenfilepath) + "/" + basename + ".dds"
+        tgapath = InsensitivePath(tgapath)
+        ddspath = InsensitivePath(ddspath)
         img = None
         try:
             img = bpy.data.images.load(tgapath)
