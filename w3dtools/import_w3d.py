@@ -45,7 +45,7 @@ def InsensitiveOpen(path):
             path = os.path.join(dir,filename)
             return open(path,"rb")
         
-def InsensitivePath(path)
+def InsensitivePath(path):
      #find the file on unix
     dir = os.path.dirname(path)
     name = os.path.basename(path)
@@ -355,7 +355,12 @@ def ReadTimeCodedAnimationVector(file, self, chunkEnd):
             
         for x in range(0, count * vecLen):
             print(ReadFloat(file))
-        
+    elif delta== 1:
+        print(ReadFloat(file))
+        for x in range(0, vecLen):
+            print(ReadFloat(file))
+        while file.tell() < chunkEnd:
+            print(ReadUnsignedByte(file))
     else:
         while file.tell() < chunkEnd:
             file.read(1)
